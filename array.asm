@@ -5,7 +5,7 @@ include p2lib.inc
 .data
 .code
 ;--------------------------------------------------
-bubbleSort proc near c uses eax ecx esi, startArr:ptr word, sizeArr: word
+bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
 ; Ordena de forma ascendente un arreglo que inicia 
 ; en statArr y de tamaño sizeArr
 ;--------------------------------------------------
@@ -30,37 +30,53 @@ bubbleSort proc near c uses eax ecx esi, startArr:ptr word, sizeArr: word
     ret 
 bubbleSort endp
 
-; quickSort proc near c uses eax, ecx, esi, startArr:ptr word, arrLow: word, arrHigh: word
-;     local pidx : word
-;     mov pidx, 0             ;;inicializa la variable
-;     mov ax, arrLow          
-;     cmp ax, arrHigh         ;;compara el limite superior con el inferior
-;     jge qSEnd               ;si es mayor o igual termina el procedimiento
+quickSort proc far c uses eax, ecx, esi, startArr:ptr word, arrLow: word, arrHigh: word
+    local pidx : word
+    mov pidx, 0             ;;inicializa la variable
+    mov ax, arrLow          
+    cmp ax, arrHigh         ;;compara el limite superior con el inferior
+    jge qSEnd               ;;si es mayor o igual termina el procedimiento
+        xor ax, ax          ;;ax contendrá el valor de retorno, se limpia
+        invoke partition, startArr, arrLow, arrHigh
+        mov pidx, ax        ;;almacena el pivote
+        dec pidx            ;;decrementa el pivote
+        invoke quickSort, startArr, arrLow, pidx
+        inc pidx            ;;restablece y aumenta el pivote
+        inc pidx
+        invoke quickSort, startArr, pidx, arrHigh
+    qSEnd:
+quickSort endp
 
-;     qSEnd:
-; quickSort endp
-
-; partition proc uses eax, ecx, esi, edi, startArr : ptr word, arrLow : word, arrHigh : word
-;     local pivot: word, iterator: word
-;     mov pivot, 0
-;     mov iterator, 0
-;     xor si, si
-;     xor bx, bx
-;     mov bx, startArr
-;     mov pivot, [si + arrHigh]       ;;inicializa el pivote
-;     mov ax, arrLow
-;     dec ax
-;     mov iterator, ax                ;;inicializa el iterator (index)
-;     mov cx, arrHigh
-;     dec cx
-;     sub cx, arrLow
-;     mov si, arrLow
-;     _1partition:
-;         cmp [bx + si], pivot
-;         jge _2partition
-;             add iterator, 2
-;             mov ax, 
-;         _2partition:
-;             loop _1partition
-; partition endp
+partition proc c uses ecx, esi, edi, startArr : ptr word, arrLow : word, arrHigh : word
+    local pivote : word
+    xor si, si                      ;;limpiar si
+    xor bx, bx                      ;;limpiar bx
+    xor di, di                      ;;limpia di
+    mov bx, startArr                ;;especifica el inicio del array
+    mov di, arrHigh                 ;;especifica el indice para el pivote
+    shl di, 1                       ;;multiplica por dos el limite superior
+    mov pivote, [bx + di]           ;;obtiene el pivote
+    mov di, arrLow
+    sub di, 2                       ;;especifica el indice del elemento menor 'i'
+    mov cx, arrHigh
+    sub cx, arrLow                  ;;especifica el número de iteraciones a realizar
+    _1partition:
+        cmp [bx + si], pivote
+        jge _2partition
+            add di, 2               ;;avanza a la siguiente posición en 'i'
+            mov ax, [bx + di]
+            xchg ax, [bx + si]
+            mov [bx + si], ax
+        _2partition:
+            add si, 2               ;;avanza a la siguiente posición en 'j'
+            loop _1partition
+    add di, 2                       ;;avanza a la siguiente posición en 'i'
+    mov ax, [bx + di]
+    mov si, arrHigh
+    shl si, 1                       ;;recupera el limite superior
+    xchg ax, [bx + si]              ;;intercambia 
+    mov [bx+ si], ax
+    ;;mueve a ax el retorno de (i + 1) <=> di
+    mov ax, di
+partition endp
 end

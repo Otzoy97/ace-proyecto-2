@@ -1,6 +1,4 @@
 .code
-bubbleSort proto near c startArr:ptr word, sizeArr: word
-;printChar proto near c char: byte
-;externdef bubbleSort:near
-;externdef printChar:near
+bubbleSort proto far c startArr:ptr word, sizeArr: word
+quickSort proto far c startArr: ptr word, arrLow: word, arrHigh: word
 @curseg ends

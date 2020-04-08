@@ -22,7 +22,9 @@ main proc
         printChar bl
         add di, 2
         loop _1
-    invoke bubbleSort, offset array, 9
+    printChar 0ah
+    printChar 0dh
+    invoke quickSort, offset array, 8
     mov cx, 9
     xor di, di
     _2:     
