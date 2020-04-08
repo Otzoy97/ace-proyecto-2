@@ -32,13 +32,16 @@ bubbleSort endp
 
 partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHigh : word
     local pivote : word
+    mov ax, arrLow
+    cmp ax, arrHigh
+    jz _partEnd
     xor si, si                      ;;limpiar si
     xor bx, bx                      ;;limpiar bx
     xor di, di                      ;;limpia di
     mov bx, startArr                ;;especifica el inicio del array
     mov di, arrHigh                 ;;especifica el indice para el pivote
     shl di, 1                       ;;multiplica por dos el limite superior
-    mov ax, [bx + di]           ;;obtiene el pivote
+    mov ax, [bx + di]               ;;obtiene el pivote
     mov pivote, ax
     mov di, arrLow
     sub di, 2                       ;;especifica el indice del elemento menor 'i'
@@ -49,20 +52,26 @@ partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHi
         cmp [bx + si], ax
         jge _2partition
             add di, 2               ;;avanza a la siguiente posición en 'i'
-            mov ax, [bx + di]
-            xchg ax, [bx + si]
-            mov [bx + si], ax
+            push [bx + di]
+            push [bx + si]
+            pop [bx + di]
+            pop [bx + si]
+            ;mov ax, [bx + di]
+            ;xchg ax, [bx + si]
+            ;mov [bx + di], ax
         _2partition:
             add si, 2               ;;avanza a la siguiente posición en 'j'
             loop _1partition
     add di, 2                       ;;avanza a la siguiente posición en 'i'
-    mov ax, [bx + di]
     mov si, arrHigh
     shl si, 1                       ;;recupera el limite superior
-    xchg ax, [bx + si]              ;;intercambia 
-    mov [bx+ si], ax
+    push [bx + di]
+    push [bx + si]
+    pop [bx + di]
+    pop [bx + si]
     ;;mueve a ax el retorno de (i + 1) <=> di
     mov ax, di
+    _partEnd:
     ret
 partition endp
 
@@ -75,10 +84,9 @@ quickSort proc far c uses eax, startArr:ptr word, arrLow: word, arrHigh: word
         xor ax, ax          ;;ax contendrá el valor de retorno, se limpia
         invoke partition, startArr, arrLow, arrHigh
         mov pidx, ax        ;;almacena el pivote
-        dec pidx            ;;decrementa el pivote
+        sub pidx, 2         ;;decrementa el contador
         invoke quickSort, startArr, arrLow, pidx
-        inc pidx            ;;restablece y aumenta el pivote
-        inc pidx
+        add pidx, 4         ;;reestablece y aumenta el indice
         invoke quickSort, startArr, pidx, arrHigh
     qSEnd:
     ret
