@@ -24,7 +24,7 @@ main proc
         loop _1
     printChar 0ah
     printChar 0dh
-    invoke quickSort, offset array, 8
+    invoke quickSort, offset array, 0, 8
     mov cx, 9
     xor di, di
     _2:     
