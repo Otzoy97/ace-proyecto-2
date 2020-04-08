@@ -31,52 +31,94 @@ bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
     ret 
 bubbleSort endp
 
+;--------------------------------------------------
 partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHigh : word
+;--------------------------------------------------
     local pivote : word
-    mov ax, arrLow
-    cmp ax, arrHigh
-    jz _partEnd
-    xor si, si                      ;;limpiar si
-    xor bx, bx                      ;;limpiar bx
-    xor di, di                      ;;limpia di
+    xor si, si
     mov bx, startArr                ;;especifica el inicio del array
-    mov di, arrHigh                 ;;especifica el indice para el pivote
-    shl di, 1                       ;;multiplica por dos el limite superior
+    mov di, arrLow                  ;;especifica el indice para el pivote
+    shl di, 1                       ;;multiplica por dos el limite inferior
     mov ax, [bx + di]               ;;obtiene el pivote
     mov pivote, ax
-    mov di, arrLow
-    sub di, 2                       ;;especifica el indice del elemento menor 'i'
-    mov cx, arrHigh
-    sub cx, arrLow                  ;;especifica el número de iteraciones a realizar
+    mov di, arrLow                  ;; i
+    inc di                          
+    shl di, 1                       ;; i = start + 1
+    mov si, di                      ;; j = i
+    mov cx, arrLow                  
+    inc cx                          ;; for j = arrLow + 1
     _1partition:
-        mov ax, pivote
-        cmp [bx + si], ax
+        cmp cx, arrHigh             ;; j <= arrHigh
+        jg _partPreEnd              
+        mov ax, pivote  
+        cmp [bx + si], ax           ;;arr[j] < pivote
         jge _2partition
-            add di, 2               ;;avanza a la siguiente posición en 'i'
-            push [bx + di]
-            push [bx + si]
-            pop [bx + di]
-            pop [bx + si]
-            ;mov ax, [bx + di]
-            ;xchg ax, [bx + si]
-            ;mov [bx + di], ax
+            push [bx + di]          ;; arr[i]
+            push [bx + si]          ;; arr[j]
+            pop [bx + di]           ;; arr[i] = arr[j]
+            pop [bx + si]           ;; arr[j] = arr[i]
+            add di, 2               ;; i++
+    ;------------------------------------------------------
+        ; push cx
+        ; push bx
+        ; push di
+        ; mov cx, 7
+        ; xor di, di
+        ; _1:
+        ;     xor bx, bx
+        ;     mov bx, startArr
+        ;     mov bx, [bx + di]
+        ;     add bx, '0'
+        ;     printChar bl
+        ;     add di, 2
+        ;     loop _1
+        ; printChar 0ah
+        ; printChar 0dh
+        ; pop di
+        ; pop bx
+        ; pop cx
+    ;------------------------------------------------------
         _2partition:
-            add si, 2               ;;avanza a la siguiente posición en 'j'
-            loop _1partition
-    add di, 2                       ;;avanza a la siguiente posición en 'i'
-    mov si, arrHigh
-    shl si, 1                       ;;recupera el limite superior
-    push [bx + di]
-    push [bx + si]
-    pop [bx + di]
-    pop [bx + si]
-    ;;mueve a ax el retorno de (i + 1) <=> di
-    mov ax, di
-    _partEnd:
-    ret
+            add si, 2               ;; j++
+            inc cx                  ;; j++
+            jmp _1partition
+    _partPreEnd:            
+        sub di, 2                       ;; i = i - 1
+        mov si, arrLow                  ;; start
+        shl si, 1                       ;; start
+        push [bx + si]                  ;; arr[start]
+        push [bx + di]                  ;; arr[i]
+        pop [bx + si]                   ;; arr[start] = arr[i]
+        pop [bx + di]                   ;; arr[i] = arr[start]
+    ;------------------------------------------------------
+        ; push cx
+        ; push bx
+        ; push di
+        ; mov cx, 7
+        ; xor di, di
+        ; _2:
+        ;     xor bx, bx
+        ;     mov bx, startArr
+        ;     mov bx, [bx + di]
+        ;     add bx, '0'
+        ;     printChar bl
+        ;     add di, 2
+        ;     loop _2
+        ; printChar 0ah
+        ; printChar 0dh
+        ; pop di
+        ; pop bx
+        ; pop cx
+    ;------------------------------------------------------
+        mov ax, di                      ;;mueve a ax el retorno de (i + 1) <=> di
+        ret
 partition endp
 
+;--------------------------------------------------
 quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: word
+; Ordena de forma ascendente el arreglo de startArr
+; y que comienza en arrLow y termina en arrHigh
+;--------------------------------------------------
     local pidx : word
     mov pidx, 0             ;;inicializa la variable
     mov ax, arrLow          
@@ -87,20 +129,6 @@ quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: wor
         shr ax, 1           ;;divide dentro de dos
         mov pidx, ax        ;;almacena el pivote
         dec pidx            ;;decrementa el contador
-    
-    mov cx, 9
-    xor di, di
-    _1:
-        xor bx, bx
-        mov bx, startArr
-        mov bx, [bx + di]
-        add bx, '0'
-        printChar bl
-        add di, 2
-        loop _1
-    printChar 0ah
-    printChar 0dh
-
         invoke quickSort, startArr, arrLow, pidx
         add pidx, 2         ;;reestablece y aumenta el indice
         invoke quickSort, startArr, pidx, arrHigh

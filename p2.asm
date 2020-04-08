@@ -6,14 +6,14 @@ include p2lib.inc
 include string.asm
 ;--------------------------------------------------
 .data
-array   dw  8,7,4,0,1,3,2,9,1
+array   dw  6,8,4,0,1,9,7
 ;--------------------------------------------------
 .code
 .startup
     mov ax, @data
     mov ds, ax
 main proc
-    mov cx, 9
+    mov cx, 7
     xor di, di
     _1:
         xor bx, bx
@@ -24,8 +24,8 @@ main proc
         loop _1
     printChar 0ah
     printChar 0dh
-    invoke quickSort, offset array, 0, 8
-    mov cx, 9
+    invoke quickSort, offset array, 0, 6
+    mov cx, 7
     xor di, di
     _2:     
         xor bx, bx
