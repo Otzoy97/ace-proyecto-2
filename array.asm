@@ -2,6 +2,7 @@
 .386
 .stack 400h
 include p2lib.inc
+include string.asm
 .data
 .code
 ;--------------------------------------------------
@@ -75,7 +76,7 @@ partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHi
     ret
 partition endp
 
-quickSort proc far c uses eax, startArr:ptr word, arrLow: word, arrHigh: word
+quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: word
     local pidx : word
     mov pidx, 0             ;;inicializa la variable
     mov ax, arrLow          
@@ -83,10 +84,25 @@ quickSort proc far c uses eax, startArr:ptr word, arrLow: word, arrHigh: word
     jge qSEnd               ;;si es mayor o igual termina el procedimiento
         xor ax, ax          ;;ax contendrá el valor de retorno, se limpia
         invoke partition, startArr, arrLow, arrHigh
+        shr ax, 1           ;;divide dentro de dos
         mov pidx, ax        ;;almacena el pivote
-        sub pidx, 2         ;;decrementa el contador
+        dec pidx            ;;decrementa el contador
+    
+    mov cx, 9
+    xor di, di
+    _1:
+        xor bx, bx
+        mov bx, startArr
+        mov bx, [bx + di]
+        add bx, '0'
+        printChar bl
+        add di, 2
+        loop _1
+    printChar 0ah
+    printChar 0dh
+
         invoke quickSort, startArr, arrLow, pidx
-        add pidx, 4         ;;reestablece y aumenta el indice
+        add pidx, 2         ;;reestablece y aumenta el indice
         invoke quickSort, startArr, pidx, arrHigh
     qSEnd:
     ret
