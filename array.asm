@@ -147,7 +147,7 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
     mov gap, 0
     mov i, 0
     ;--------------------
-    mov bx, starArr
+    mov bx, startArr
     ;--------------------
     mov ax, arrLength
     shr ax, 1                   ;; divide dentro de dos
@@ -192,14 +192,14 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
         push di
         mov cx, 7
         xor di, di
-        _2:
+        _1:
             xor bx, bx
-            mov bx, arrLength
+            mov bx, startArr
             mov bx, [bx + di]
             add bx, '0'
             printChar bl
             add di, 2
-            loop _2
+            loop _1
         printChar 0ah
         printChar 0dh
         pop di
@@ -228,7 +228,7 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
         xor di, di
         _2:
             xor bx, bx
-            mov bx, arrLength
+            mov bx, startArr
             mov bx, [bx + di]
             add bx, '0'
             printChar bl

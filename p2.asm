@@ -24,7 +24,7 @@ main proc
         loop _1
     printChar 0ah
     printChar 0dh
-    invoke shellSort, offset array, 6
+    invoke shellSort, offset array, 7
     mov cx, 7
     xor di, di
     _2:     
