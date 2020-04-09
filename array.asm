@@ -135,4 +135,122 @@ quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: wor
     qSEnd:
     ret
 quickSort endp
+
+;--------------------------------------------------
+shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : word
+; Ordena de forma ascendente el arreglo de starArr
+; utilizando el algoritmo de shellsort
+;--------------------------------------------------
+    local temp : word, j : word, gap : word, i: word
+    mov temp, 0
+    mov j, 0
+    mov gap, 0
+    mov i, 0
+    ;--------------------
+    mov bx, starArr
+    ;--------------------
+    mov ax, arrLength
+    shr ax, 1                   ;; divide dentro de dos
+    mov gap, ax                 
+    _shell1:
+        mov cx, gap             
+        cmp cx, 0               ;; gap > 0
+        jle _shell6             ;; termina _shell1
+        mov i, cx               ;; i = gap
+        _shell2:
+            mov cx, i           ;; i
+            cmp cx, arrLength   ;; i < n
+            jge _shell5         ;; termina _shell2
+            mov di, cx          ;; di = cx = i
+            shl di, 1           ;; multiplica por dos
+            push [bx + di]      ;; arr[i]
+            pop temp            ;; temp = arr[i]
+            ;--------------------
+            push i
+            pop j               ;; j = i
+            _shell3:
+                mov cx, j       ;; 
+                cmp cx, gap     ;; j >= gap
+                jl _shell4      ;; termina shell3
+                mov di, gap
+                mov si, j
+                shl di, 1       
+                shl si, 1       ;; lo multiplica por dos
+                sub si, di      ;; j - gap
+                mov ax, [bx + si] ;; arr[j -gap]
+                mov cx, temp    ;; temp
+                cmp ax, cx      ;; arr[j - gap] > temp
+                jle _shell4     ;; termina shell3
+                mov di, j
+                shl di, 1       ;; lo multiplica por dos
+                push [bx + si]  ;; arr[j - gap]
+                pop [bx + di]   ;; arr[j]
+
+    ;------------------------------------------------------
+        push cx
+        push bx
+        push di
+        mov cx, 7
+        xor di, di
+        _2:
+            xor bx, bx
+            mov bx, arrLength
+            mov bx, [bx + di]
+            add bx, '0'
+            printChar bl
+            add di, 2
+            loop _2
+        printChar 0ah
+        printChar 0dh
+        pop di
+        pop bx
+        pop cx
+    ;------------------------------------------------------
+
+                ;--------------------
+                mov di, gap     ;; gap
+                mov si, j       ;; j
+                sub si, di      ;; j = j - gap
+                mov j, si
+                jmp _shell3
+            _shell4:
+            mov si, j
+            shl si, 1           ;; multiplica por dos
+            push temp           ;; temp
+            pop [bx + si]       ;; arr[j] = temp
+
+
+    ;------------------------------------------------------
+        push cx
+        push bx
+        push di
+        mov cx, 7
+        xor di, di
+        _2:
+            xor bx, bx
+            mov bx, arrLength
+            mov bx, [bx + di]
+            add bx, '0'
+            printChar bl
+            add di, 2
+            loop _2
+        printChar 0ah
+        printChar 0dh
+        pop di
+        pop bx
+        pop cx
+    ;------------------------------------------------------
+
+
+            ;--------------------
+            inc i               ;; i++
+            jmp _shell2         
+        _shell5:
+            mov ax, gap
+            shr ax, 1           ;; lo divide dentro de 2
+            mov gap, ax
+            jmp _shell1
+    _shell6:
+        ret
+shellSort endp
 end
