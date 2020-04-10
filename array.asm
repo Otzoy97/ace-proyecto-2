@@ -187,24 +187,24 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
                 pop [bx + di]   ;; arr[j]
 
     ;------------------------------------------------------
-        push cx
-        push bx
-        push di
-        mov cx, 7
-        xor di, di
-        _1:
-            xor bx, bx
-            mov bx, startArr
-            mov bx, [bx + di]
-            add bx, '0'
-            printChar bl
-            add di, 2
-            loop _1
-        printChar 0ah
-        printChar 0dh
-        pop di
-        pop bx
-        pop cx
+        ; push cx
+        ; push bx
+        ; push di
+        ; mov cx, 7
+        ; xor di, di
+        ; _1:
+        ;     xor bx, bx
+        ;     mov bx, startArr
+        ;     mov bx, [bx + di]
+        ;     add bx, '0'
+        ;     printChar bl
+        ;     add di, 2
+        ;     loop _1
+        ; printChar 0ah
+        ; printChar 0dh
+        ; pop di
+        ; pop bx
+        ; pop cx
     ;------------------------------------------------------
 
                 ;--------------------
@@ -221,24 +221,24 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
 
 
     ;------------------------------------------------------
-        push cx
-        push bx
-        push di
-        mov cx, 7
-        xor di, di
-        _2:
-            xor bx, bx
-            mov bx, startArr
-            mov bx, [bx + di]
-            add bx, '0'
-            printChar bl
-            add di, 2
-            loop _2
-        printChar 0ah
-        printChar 0dh
-        pop di
-        pop bx
-        pop cx
+        ; push cx
+        ; push bx
+        ; push di
+        ; mov cx, 7
+        ; xor di, di
+        ; _2:
+        ;     xor bx, bx
+        ;     mov bx, startArr
+        ;     mov bx, [bx + di]
+        ;     add bx, '0'
+        ;     printChar bl
+        ;     add di, 2
+        ;     loop _2
+        ; printChar 0ah
+        ; printChar 0dh
+        ; pop di
+        ; pop bx
+        ; pop cx
     ;------------------------------------------------------
 
 
