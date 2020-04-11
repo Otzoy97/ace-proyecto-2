@@ -40,7 +40,7 @@ videoStop proc far c uses eax
 ; Termina el modo video y regresa al modo texto
 ;--------------------------------------------------
     push es
-    mov ah, 0003h
+    mov ax, 0003h
     int 10h
     ;libera la memoria del doble buffer
     mov ax, vram
@@ -51,8 +51,8 @@ videoStop proc far c uses eax
     ret
 videoStop endp
 
-;--------------------------------------------------7
-syncBuffer proc far c use
+;--------------------------------------------------
+syncBuffer proc far c uses edi esi
 ; Copia la imagen almacenada en vram a la memoria de
 ; video
 ;--------------------------------------------------
@@ -73,4 +73,26 @@ syncBuffer proc far c use
     popad
     ret
 syncBuffer endp
+
+initPrint proc far c uses eax
+    mov ax, vram
+    mov es, ax
+    ret
+initPrint endp
+
+;--------------------------------------------------
+printPixel proc far c uses eax edi ebx, color : byte, column :  word, row : word
+;--------------------------------------------------
+    ; mov ax, vram
+    ; mov es, ax          ;; prepara el lugar a donde se deberá copiar
+    mov ax, row           ;; ax = fila
+    mov bl, 140h          ;; multiplica por 320
+    mul bl                ;; ax = ax * 5
+    add ax, column        ;; ax = ax + columna
+    mov di, ax            ;; di = ax
+    mov al, color
+    mov es:[di], al
+    ret
+printPixel endp 
+
 end
