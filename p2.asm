@@ -16,20 +16,9 @@ main proc
     call videoStart
     _1:
         call clearScreen
-        call initPrint
-        mov cx, 10
-        ; .while (cx <= 189)
-        ;     mov ax, 0
-        ;     .while(ax <= 319)
-        ;         invoke printPixel, 0fh, ax, cx
-        ;         add ax, 10
-        ;     .endw
-        ;     inc cx
-        ; .endw
-        
+        call initPrint        
         call printFrame
         call syncBuffer
-
         mov ah, 01h
         int 16h
         jnz _2

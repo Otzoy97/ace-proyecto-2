@@ -74,21 +74,60 @@ syncBuffer proc far c uses edi esi
     ret
 syncBuffer endp
 
+;--------------------------------------------------
 initPrint proc far c uses eax
+; Mueve la posición de memoria reservada al 
+; segmento de dato extra
+;--------------------------------------------------
     mov ax, vram
     mov es, ax
     ret
 initPrint endp
 
 ;--------------------------------------------------
-printPixel proc far c uses eax edi ebx, color : byte, column :  word, row : word
+printSquare proc far c uses eax ebx ecx edx edi, color : byte, start : word, base : word, heigth : word
+; Pinta un cuadrado de un color desde la posición
+; de inicio.
+; El tamaño del cuadrado está dado por la base
+; y la altura
+; La posición de inicio indica la esquina superior
+; izquierda desde donde se empezará a pintar
+;--------------------------------------------------
+    local i : word
+    mov i, 0                ;; inicializa el contador de filas
+    mov ax, vram
+    mov es, ax              ;; inicializa el extra data segment
+    _printSq1:
+        mov bx, i
+        cmp bx, heigth
+        jge _printSq2       ;; terminó de pintar el cuadrado
+        mov ax, 140h        ;; 320
+        xor dx, dx
+        mul bx              ;; 320*i
+        add ax, start       ;; compone la nueva posición 
+        mov di, ax          ;; di = start + 320*i
+        mov al, color       ;; mueve el color que se deberá copiar
+        mov cx, base        ;; mueve el ancho del cuarado
+        cld                 ;; limpia el registro de flags
+        rep stosb           ;; copia al a es:di, cx veces
+        inc i
+        jmp _printSq1
+    _printSq2:
+        ret
+printSquare endp
+
+;--------------------------------------------------
+printPixel proc far c uses eax edi ebx edx, color : byte, column :  word, row : word
+; Pina un pixel del color especificado en la posición
+; dada por la columna y fila
 ;--------------------------------------------------
     ; mov ax, vram
     ; mov es, ax          ;; prepara el lugar a donde se deberá copiar
     mov ax, row           ;; ax = fila
-    mov bl, 140h          ;; multiplica por 320
-    mul bl                ;; ax = ax * 5
-    add ax, column        ;; ax = ax + columna
+    mov bx, 140h          ;; multiplica por 320
+    xor dx, dx
+    mul bx                ;; multiplica por 320
+    add ax, column        ;; suma la columna
     mov di, ax            ;; di = ax
     mov al, color
     mov es:[di], al
