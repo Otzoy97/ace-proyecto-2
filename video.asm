@@ -117,6 +117,36 @@ printSquare proc far c uses eax ebx ecx edx edi, color : byte, start : word, bas
 printSquare endp
 
 ;--------------------------------------------------
+printPicture proc far c uses eax ebx ecx esi edi edx, picOff : ptr word, start : word, base : word, heigth : word
+; Pinta una imagen con forma cuadrada desde la posición
+; start
+; El tamaño de la imagen está dado por la base y 
+; altura
+;--------------------------------------------------
+    local i : word
+    mov i, 0                ;; inicializa el contador de filas
+    mov si, picOff          ;; especifica desde donde deberá leer la sección ds:si
+    mov ax, vram
+    mov es, ax              ;; inicializa el doble buffer
+    _printPic1:
+        mov bx, i
+        cmp bx, heigth
+        jge _printPic2      ;; terminó de pintar la figura
+        mov ax, 140h        ;; 320
+        xor dx, dx          
+        mul bx              ;; 320 * i
+        add ax, start       
+        mov di, ax          ;; di = start + 320*i
+        mov cx, base        ;; mueve el ancho de la imagen
+        cld                 ;; limpia el registro flags|
+        rep movsb           ;; copia ds:si a es:di
+        inc i
+        jmp _printPic1
+    _printPic2:
+        ret
+printPicture endp
+
+;--------------------------------------------------
 printPixel proc far c uses eax edi ebx edx, color : byte, column :  word, row : word
 ; Pina un pixel del color especificado en la posición
 ; dada por la columna y fila

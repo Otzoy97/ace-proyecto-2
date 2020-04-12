@@ -14,10 +14,14 @@ array   dw  6,8,4,0,1,9,7
     mov ds, ax
 main proc
     call videoStart
+    call initGame
+    
     _1:
         call clearScreen
         call initPrint        
         call printFrame
+        call printBackground
+        call printCar
         call syncBuffer
         mov ah, 01h
         int 16h
