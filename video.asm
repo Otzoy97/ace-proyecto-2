@@ -3,21 +3,24 @@
 .stack 400h
 include p2lib.inc
 .data
-vram dw ?
+vram  dw ?      ;; almacena el offset de la memoria reservada que se utiliza como doble buffer
+vramS dw 0      ;; almacena el tamaño el número doble words utilizados para el doble buffer
 .code
+
 ;--------------------------------------------------
-videoStart proc far c uses eax ebx
+videoStart proc far c uses eax ebx ecx, videoSize : word
 ; Inicia el modo video
 ;--------------------------------------------------
-    ;reserva memoria para el doble buffer
+    mov cx, videoSize
+    shl cx, 2                   ;; lo multiplica por 4
+    mov vramS, cx               ;; almacena el tamaño
     mov ah, 48h
-    mov bx, 4000
-    int 21h
+    mov bx, videoSize
+    int 21h                     ;; reserva memoria para el doble buffer
     jc _videoStartEnd
     mov vram, ax
-    ;configura modo video
     mov ax, 13h
-    int 10h
+    int 10h                     ;; configura modo video
     _videoStartEnd:
         ret
 videoStart endp 
@@ -29,7 +32,7 @@ clearScreen proc far c uses eax edi ecx
     mov es, ax          ;; carga vram a ES
     xor edi, edi        ;; comienza desde 0
     xor eax, eax        ;; <cadena> a almacenar en es:edi
-    mov cx, 16000       ;; moverá 16000 dd = 64000 bytes
+    mov cx, vramS       ;; moverá 16000 dd = 64000 bytes
     cld                 ;; limpia el registro flags
     rep stosd           ;;escribe 16000 doubleword
     ret
@@ -38,46 +41,60 @@ clearScreen endp
 ;--------------------------------------------------
 videoStop proc far c uses eax
 ; Termina el modo video y regresa al modo texto
+; Libera la memoria resservada del doble buffer|
 ;--------------------------------------------------
     push es
     mov ax, 0003h
-    int 10h
-    ;libera la memoria del doble buffer
+    int 10h         ;; regresa al modo texto
     mov ax, vram
     mov es, ax
     mov ah, 49h
-    int 21h
+    int 21h         ;; libera la memoria del doble buffer
+    mov vramS, 0    ;; reinicia el valor del tamaño
     pop es
     ret
 videoStop endp
 
 ;--------------------------------------------------
-syncBuffer proc far c uses edi esi
-; Copia la imagen almacenada en vram a la memoria de
-; video
+syncBuffer proc far c uses edi esi, startPos : word, base : word, heigth : word
+; STARTPOS : indica el offset de la memoria de video
+; BASE     : largo de "línea" de información a copiar en una sola iteración
+; HEIGTH   : número de iteraciones a realizar
+; Copia la imagen almacenada en el doble buffer a la memoria de video
 ;--------------------------------------------------
+    local i : word 
     pushad
     push es
     push ds
-    ;--------------------
-    mov ds, vram
+    mov i, 0            ;; inicializa i = 0
+    mov ds, vram        ;; indica la pos de mem
     xor si, si
     mov dx, 0A000h
-    mov es, dx
-    xor di, di
-    mov cx, 64000
-    rep movsb
-    ;--------------------
-    pop ds
-    pop es
-    popad
-    ret
+    mov es, dx          ;; indica la pos de mem de video
+    _syncBuff1:
+        mov bx, i
+        cmp bx, heigth
+        jge 
+        mov ax, 140h    ;; 320
+        xor dx, dx
+        mul bx          ;; 320 * i
+        add ax, startPos;; startPos + 320 * i
+        mov di, ax      ;; indica el offset de la mem de video
+        mov cx, base
+        cld             ;; limpia el registro de flags
+        rep movsb
+        inc i
+        jmp _syncBuff1
+    _syncBuff2:
+        pop ds
+        pop es
+        popad
+        ret
 syncBuffer endp
 
 ;--------------------------------------------------
 initPrint proc far c uses eax
-; Mueve la posición de memoria reservada al 
-; segmento de dato extra
+; Mueve la posición de memoria reservada al segmento de dato extra
 ;--------------------------------------------------
     mov ax, vram
     mov es, ax
@@ -86,12 +103,11 @@ initPrint endp
 
 ;--------------------------------------------------
 printSquare proc far c uses eax ebx ecx edx edi, color : byte, start : word, base : word, heigth : word
-; Pinta un cuadrado de un color desde la posición
-; de inicio.
-; El tamaño del cuadrado está dado por la base
-; y la altura
-; La posición de inicio indica la esquina superior
-; izquierda desde donde se empezará a pintar
+; COLOR     : INDICA EL COLOR DEL CUADRILATERO
+; START     : INDICA LA POS DE INICIO DESDE DONDE SE DEBERÁ PINTAR LA FIGURA 
+; BASE      : INDICA EL NÚMERO DE BYTES A COPIAR EN UNA SOLA ITERACIÓN
+; HEIGTH    : INDICA EL NÚMERO DE ITERACIONES A REALIZAR
+; Pinta un cuadrado en el doble buffer
 ;--------------------------------------------------
     local i : word
     mov i, 0                ;; inicializa el contador de filas
@@ -118,10 +134,11 @@ printSquare endp
 
 ;--------------------------------------------------
 printPicture proc far c uses eax ebx ecx esi edi edx, picOff : ptr word, start : word, base : word, heigth : word
-; Pinta una imagen con forma cuadrada desde la posición
-; start
-; El tamaño de la imagen está dado por la base y 
-; altura
+; PICOFF        : INDICA EL PUNTERO DEL ARRAY QUE CONTIENE LA IMAGEN
+; START         : INDICA LA POS DE INICIO DESDE DONDE SE DEBERÁ PINTAR LA FIGURA
+; BASE          : INDICA EL NÚMERO DE BYTES A COPIAR EN UNA SOLA ITERACIÓN
+; HEIGTH        : INDICA EL NÚMERO DE ITERACIONES A REALIZAR
+; Pinta una imagen con plantilla cuadrada en el doble buffer
 ;--------------------------------------------------
     local i : word
     mov i, 0                ;; inicializa el contador de filas
@@ -148,8 +165,10 @@ printPicture endp
 
 ;--------------------------------------------------
 printPixel proc far c uses eax edi ebx edx, color : byte, column :  word, row : word
-; Pina un pixel del color especificado en la posición
-; dada por la columna y fila
+; COLOR         : INDICA EL COLOR DEL PIXEL A PINTAR
+; COLUMN        : INDICA LA COLUMNA EN DONDE DEBERÁ PINTARSE EL PIXEL
+; ROW           : INDICA LA FILA EN DONDE DEBERÁ PITNARSE EL PIXEL
+; Pinta un pixel en el doble buffer
 ;--------------------------------------------------
     ; mov ax, vram
     ; mov es, ax          ;; prepara el lugar a donde se deberá copiar
