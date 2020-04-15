@@ -1,19 +1,16 @@
 .code
+;; array functions
 bubbleSort proto far c startArr : ptr word, sizeArr : word
 quickSort proto far c startArr : ptr word, arrLow : word, arrHigh : word
 shellSort proto far c startArr : ptr word, arrLength : word
-printPixel proto far c color : byte, column : word, row : word
-printSquare proto far c color : byte, start : word, base : word, height : word
-printPicture proto far c picOff : ptr word, start : word, base : word, height : word
-printObs proto far c pos : byte, bType : byte
-externdef initPrint:far
-externdef videoStart:far
-externdef clearScreen:far
-externdef videoStop:far
-externdef syncBuffer:far
+;; video functions
+syncBuffer proto far c videoPos : word, startPos : word, base : word, heigth : word, offPos : word
+;; game functions
 externdef initGame:far
-externdef printFrame:far
-externdef printBackground:far
-externdef printCar:far
-externdef printHeader:far
+externdef playGame:far
+;; global variables
+externdef levelsInfo:byte
+externdef penaltyScore:word
+externdef rewardScore:word
+externdef actualUser:byte
 @curseg ends

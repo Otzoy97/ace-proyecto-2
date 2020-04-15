@@ -13,26 +13,26 @@ array   dw  6,8,4,0,1,9,7
     mov ax, @data
     mov ds, ax
 main proc
-    call videoStart
-    call initGame
+    ; call videoStart
+    ; call initGame
     _1:
-        call clearScreen
-        call initPrint        
-        call printFrame
-        call printBackground
-        invoke printObs, 1, 0
-        invoke printObs, 3, 1
-        call printCar
-        call syncBuffer
-        call printHeader
-        mov ah, 01h
-        int 16h
-        jnz _2
-        jmp _1
+        ; call clearScreen
+        ; call initPrint        
+        ; call printFrame
+        ; call printBackground
+        ; invoke printObs, 1, 0
+        ; invoke printObs, 3, 1
+        ; call printCar
+        ; call syncBuffer
+        ; call printHeader
+        ; mov ah, 01h
+        ; int 16h
+        ; jnz _2
+        ; jmp _1
     _2:
-        call clearScreen
-        call syncBuffer
-        call videoStop
+        ; call clearScreen
+        ; call syncBuffer
+        ; call videoStop
     ; mov cx, 7
     ; xor di, di
     ; _1:

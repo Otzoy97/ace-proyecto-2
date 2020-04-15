@@ -56,7 +56,7 @@ videoStop proc far c uses eax
 videoStop endp
 
 ;--------------------------------------------------
-syncBuffer proc far c uses edi esi, videoPos : word, startPos : word, base : word, heigth : word, offPos : word
+syncBuffer proc far c videoPos : word, startPos : word, base : word, heigth : word, offPos : word
 ; STARTPOS : indica el offset de la memoria de video
 ; BASE     : largo de "línea" de información a copiar en una sola iteración
 ; HEIGTH   : número de iteraciones a realizar
