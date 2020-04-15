@@ -17,21 +17,29 @@ include string.asm
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
     fileHandler     dw ?                 ;; manejador de archivo
-    ;--------------------------------------------------
-    ; Datos de punteo
-    ;--------------------------------------------------
     headerG         db " user1     n1        000       00:00:00 "
-    actualUser      db dup(7)            ;; cadena
-    actualLevel     db 0                 ;; número
-    actualScore     dw 3                 ;; número
-    actualTime      dw 0                 ;; número
-    actualVel       dw ?                 ;; número
+    bottomP         db "                  play                  "
+    bottomU         db "                  pause                 "
+    bottomG         db "                game over               "
+    ;--------------------------------------------------
+    ; Datos del juego actual
+    ;--------------------------------------------------
+    levelsInfo      db 12 dup(0)
+    penaltyScore    dw ?                 ;; indicará cuantos pts perderá por bloque enemigo
+    rewardScore     dw ?                 ;; indicará cuantos pts ganará por bloque amigo
+    actualUser      db dup(7)            ;; cadena <-> usuario que juega
+    actualLevel     db 1                 ;; número <-> nivel actual 
+    actualScore     dw 3                 ;; número <-> punteo actual
+    actualTime      dw 0                 ;; número <-> seg jugando
+    actualLvlDur    dw ?                 ;; número <-> duración nivel actual
 .code
 
 ;--------------------------------------------------
 initGame proc far c
 ; Carga lor modelos desde los archivos .otz
 ; Reserva la memoria para el doble buffer del escenario
+; Carga la información del primer nivel
+; Reinicia todas las variables globales del juego
 ;--------------------------------------------------
     ; Carga el archivo del carro
     openFile carFN, fileHandler           ;; abre el archivo
@@ -51,6 +59,13 @@ initGame proc far c
     readFile fileHandler, bad, 900        ;; lee el archivo
     jc _initGameFailed
     closeFile fileHandler                 ;; cierra el archivo
+    ; Carga info reinicia variables
+    mov ax, levelsInfo                    ;; número de nivel
+    mov actualLevel, ax
+    mov ax, levelsInfo[1]                 ;; duración de nivel
+    mov actualLvlDur, ax        
+    mov actualScore, 0
+    mov actalTime, 0
     mov ah, 48h
     mov bx, 2025
     int 21h                               ;; reserva la memoria para la pista
@@ -68,7 +83,7 @@ initGame proc far c
 initGame endp
 
 ;--------------------------------------------------
-printHeader proc far c uses eax ebx ecx edx esi edi
+printHeader proc near c uses eax ebx ecx edx esi edi
 ; Escribe una línea de texto al inicio de la pantalla
 ; El largo de texto es 40 bytes
 ;--------------------------------------------------
@@ -86,7 +101,13 @@ printHeader proc far c uses eax ebx ecx edx esi edi
 printHeader endp
 
 ;--------------------------------------------------
-printFrame proc far c
+printFooter proc near c uses eax ebx ecx edx es edi
+; Pinta el pie de página que indica si el estado del juego
+;--------------------------------------------------
+printFooter endp
+
+;--------------------------------------------------
+printFrame proc near c
 ; Printa el marco del juego
 ; Esta función NO utiliza el doble buffer
 ;--------------------------------------------------
@@ -143,7 +164,7 @@ printFrame proc far c
 printFrame endp
 
 ;--------------------------------------------------
-printCar proc far c uses edi esi
+syncCar proc near c uses edi esi
 ; Printa la capa del carro
 ; Utiliza la variabla que almacena el modelo como doble buffer
 ;--------------------------------------------------
@@ -158,33 +179,60 @@ printCar proc far c uses edi esi
     ;; la figura se leerá desde la posición 0
     invoke syncBuffer, offset car, bx, 45, 40, 0
     ret
-printCar endp
+syncCar endp
 
 ;--------------------------------------------------
-printObs proc far c uses eax ebx ecx edx, pos : byte, bType : byte
-; POS :   BYTE indica la posición a donde pintar [0 - 5]
+printObs proc near c, pos : word, bType : byte
+; POS :   BYTE indica la posición a donde pintar [0 - 8]
 ; BTYPE : BYTE indica el tipo de obstacula a pintar
 ;         0 - amigo 1 - enemigo
-; Pinta un obstaculo puede ser pintado en 70, 100, 130, 160, 190 y 220
+; Pinta un obstaculo puede ser pintado en 0, 20, 40, 60, 80, 100, 120, 140, 160
 ;--------------------------------------------------
-    movsx ax, pos
-    mov bl, 30
-    xor dx, dx          ;; limpia dx
-    mul bl              ;; pos * 30
-    add ax, 6470        ;; 20 * 320 + 70 + pos*30
+    local i : word, offPos : word
+    pushad
+    push es
+    push ds
+    mov i, 0                ;; i = 0
+    mov offPos, 0
+    mov ax, pos
+    mov bl, 20
+    xor dx, dx              ;; limpia dx
+    mul bl                  ;; pos * 20
+    mov offPos, ax
     cmp bType, 1
-    jz  _printEnemy     ;; es un enemigo
+    jz  _printEnemy         ;; es un enemigo
         mov dx, offset good
     jmp _printOEnd
     _printEnemy:
         mov dx, offset bad
     _printOEnd:
-        invoke printPicture, dx, ax, 30, 30
-    ret
+        mov ds, dx          ;; indica la pos de mem origen
+        xor si, si
+        mov dx, vram
+        mov es, dx          ;; indica la pos de mem destino
+        _printObsSync:
+            mov bx, i
+            cmp bx, 20
+            jge _printObsSync1
+            mov ax, 180     ;; 180
+            xor dx, dx
+            mul bx          ;; 180 * i
+            add ax, offPos  ;; 180 * i + pos * 20
+            mov di, ax
+            mov cx, 20
+            cld
+            rep movsb
+            inc i
+            jmp _printObsSync
+    _printObsSync1:
+        pop ds
+        pop es
+        popad
+        ret
 printObs endp
 
 ;--------------------------------------------------
-printBackground proc far c uses edi esi
+syncBackground proc near c uses edi esi
 ; Pinta el interior del marco del juego
 ;--------------------------------------------------
     ;; cuadrado completo
@@ -196,12 +244,43 @@ printBackground proc far c uses edi esi
     ;; la figura se leerá desde la posición 3600
     invoke syncBuffer, vram, 6470, 180, 160, 3600
     ret
-printBackground endp
+syncBackground endp
 
 ;--------------------------------------------------
-playGame proc far c
+scrollBackground proc near c 
+; Actualiza la pantalla principal.
+; Reemplaza los pixeles inferiores con los superiores
+;--------------------------------------------------
+    local i : word
+    pushad
+    push es
+    push ds
+    mov i, 0
+    mov dx, vram
+    mov ds, dx          ;; determina el origen
+    mov es, dx          ;; determina el destino
+    mov si, 32219       ;; indica el origen de la información 178 * 180 + 179
+    mov di, 32399       ;; indica el destino de la información 179 * 180 + 179
+    mov cx, 32220       ;; 180 * 179
+    std                 ;; los indices se decrementeran
+    rep movsb
+    mov al, 7
+    mov cx, 180
+    std                 ;; el indice di se debe decrementar
+    rep stosb           ;; la primera línea se pinta de color gris
+    pop es
+    pop es
+    popad
+    ret
+scrollBackground endp
+
+;--------------------------------------------------
+playGame proc far c use eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
+    local dRef : word, dKey : word, dCtTime : word, playState : byte
+    mov dRef, 0
+    mov playState, 0                     ;; estado actual  = 0 <-> jugando
     mov al, 7                            ;; codigo asignado al color gris
     mov dx, vram
     mov es, dx                           ;; carga la dirección de memoria para el doble buffer
@@ -209,6 +288,74 @@ playGame proc far c
     mov cx, 32400
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
+    call printFrame                      ;; pinra el marco del juego
+    _playThread:
+        ;--------------------------------------------------
+        ; Actualiza el contador de tiempo
+        ;--------------------------------------------------
+        mov bx, dCtTime
+        add bx, 18                      ;; se ejecuta cada 18 ticks
+        mov ah, 0
+        int 1ah
+        cmp dx, bx
+        jle 
+        mov dCtTime, dx                 ;; actualiza el número de ticks
+        ;--------------------------------------------------
+        ; Actualiza el nivel
+        ;--------------------------------------------------
+        _levelRef:
+            mov bx, actualTime
+        ;--------------------------------------------------
+        ; Coloca un nuevo obstaculo
+        ;--------------------------------------------------
+        ;--------------------------------------------------
+        ; Lee el teclado
+        ;--------------------------------------------------
+        _checkKeyBoard:
+            mov ah, 01h
+            int 16h
+            jz _screenRefresh           ;; salta a la sig acción
+        _readKeyBoard:
+            mov ah, 0h
+            int 16h
+            mov bl, playState           ;; carga el estado del juego
+            .if (ah == 1h)              ;; tecla ESC
+                .if (bl == 1)           ;; esta pausado
+                    mov playState, 0    ;; jugando
+                .else                   ;; no está pausado
+                    mov playState, 1    ;; pausado
+                .endif
+            .else if (ah == 4dh && bl == 0)        ;; flecha derecha
+                mov bx, pointc
+                .if (bx != 249)         ;; limite derecho
+                    inc pointc          ;; incrementa la posicion en columna
+                .endif
+            .else if (ah == 4bh && bl == 0)        ;; flecha izquierda
+                mov bx, pointc
+                .if (bx != 70)          ;; limite izquierdo
+                    dec pointc          ;; decrementa la posicion en columna
+                .endif
+            .else if (ah == 39h)        ;; barra espaciadora
+                ;; escribirá la infoe en 
+                ;; el archivo de informes
+            .endif
+        ;--------------------------------------------------
+        ; Refresca la pantalla
+        ;--------------------------------------------------
+        _screenRefresh:
+            mov bx, dRef
+            add bx, 1                        ;; se ejecuta cada tick
+            mov ah, 0
+            int 1ah                          ;; recupera el contador del sistema
+            cmp dx, bx                       ;; dx > bx
+            jle _screenRefresh1              ;; no ha pasado los ticks suficientes
+            mov dRef, dx                     ;; actualiza el dRef
+            call scrollBackground            ;; actualiza el tablero
+            call printHeader                 ;; imprime el texto
+        _screenRefresh1:
+            call syncBackground              ;; copia el tablero a la mem de video
+            call syncCar                     ;; copia el carro a la mem de video
+            jmp _playThread
     ret
 playGame endp
 end
