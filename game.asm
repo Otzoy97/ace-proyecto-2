@@ -4,6 +4,40 @@
 include p2lib.inc
 include fileH.asm
 include string.asm
+
+;--------------------------------------------------
+toAsciiT macro fromVar, toVar
+; Comvierte a ascii la hora dada por la variables con offset toVar
+;--------------------------------------------------
+    pushad
+    mov ax, fromVar
+    mov bx, 10
+    xor dx, dx
+    xor si, si
+    _toAscii1:
+        cmp ax, 0
+        jz _toAscii2
+        cwd
+        div bx
+        push dx
+        xor dx, dx
+        inc cx
+        jmp _toAscii1
+    _toAscii2:
+        cmp cx, 2
+        jz _toAscii3
+        mov bx, fromVar
+        mov [bx], '0'
+        mov si, 1
+    _toAscii3:
+        pop ax
+        add ax, '0'
+        mov [bx + si], ax
+        inc si
+        loop _toAscii3
+    popad
+endm
+
 .data
     ;--------------------------------------------------
     ; Elementos generales
@@ -17,10 +51,23 @@ include string.asm
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
     fileHandler     dw ?                 ;; manejador de archivo
-    headerG         db " user1     n1        000       00:00:00 "
+    headerG         db " "
+    userStr         db "user1     "
+    levelStr        db "n1        "
+    scoreStr        db "000       " 
+    horaG           db "00:"
+    minuG           db "00:"
+    segsG           db "00 "
     bottomP         db "                  play                  "
     bottomU         db "                  pause                 "
     bottomG         db "                game over               "
+    lvlStr          db "          " ;; nivel 1
+                    db "          " ;; nivel 2
+                    db "          " ;; nivel 3
+                    db "          " ;; nivel 4
+                    db "          " ;; nivel 5
+                    db "          " ;; nivel 6
+    randomSeed      dw ?
     ;--------------------------------------------------
     ; Datos del juego actual
     ;--------------------------------------------------
@@ -32,6 +79,7 @@ include string.asm
     actualScore     dw 3                 ;; número <-> punteo actual
     actualTime      dw 0                 ;; número <-> seg jugando
     actualLvlDur    dw ?                 ;; número <-> duración nivel actual
+    playState       db ?                 ;; indica el estado actual del juego
 .code
 
 ;--------------------------------------------------
@@ -93,8 +141,9 @@ printHeader proc near c uses eax ebx ecx edx esi edi
     int 10h
     mov cx, 40
     xor si, si
+    mov bx, offset headerG
     _printHeader1:
-        printChar headerG[si]
+        printChar [bx + si]
         inc si
         loop _printHeader1
     ret
@@ -102,8 +151,27 @@ printHeader endp
 
 ;--------------------------------------------------
 printFooter proc near c uses eax ebx ecx edx es edi
-; Pinta el pie de página que indica si el estado del juego
+; Pinta el pie de página que indica el estado del juego
 ;--------------------------------------------------
+    mov ah, 02h
+    mov bh, 0
+    mov dx, 1800h
+    int 10h
+    mov cx, 40
+    xor si, si
+    mov bx, playState
+    .if (bx == 0)           ;; jugando
+        mov bx, offset bottomP
+    .else if (bx == 1)      ;; pausado
+        mov bx, offset bottomU
+    .else if (bx == 2)      ;; game over
+        mov bx, offset bottomG
+    .endif
+    _printFooter1:
+        printChar [bx + si]
+        inc si
+        loop _printFooter1
+    ret
 printFooter endp
 
 ;--------------------------------------------------
@@ -275,10 +343,46 @@ scrollBackground proc near c
 scrollBackground endp
 
 ;--------------------------------------------------
+timeComposing proc near c use eax ebx ecx edx
+; Compone el tiempo transcurrido en hh:mm:ss
+;--------------------------------------------------
+    local sec : word, min : word, hrs : word
+    mov sec, 0
+    mov min, 0
+    mov hrs, 0
+    mov ax, actualTime
+    mov bx, 60
+    xor dx, dx
+    .while(ax != 0)
+        cwd
+        div bx
+        push dx
+        xor dx, dx
+        inc cx
+    .endw
+    .if (cx == 3) ;; recupera horas
+        pop ax
+        toAsciiT ax, offset horaG
+        dec cx
+    .endif
+    .if (cx == 2) ;; recupera minutos
+        pop ax
+        toAsciiT min, offset minuG
+        dec cx
+    .endif
+    .if (cx == 1) ;; recupera segundos
+        pop ax
+        toAsciiT hrs, offset segsG
+        dec cx
+    .endif
+    ret
+timeComposing endp
+
+;--------------------------------------------------
 playGame proc far c use eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
-    local dRef : word, dKey : word, dCtTime : word, playState : byte
+    local dRef : word, dKey : word, dCtTime : word
     mov dRef, 0
     mov playState, 0                     ;; estado actual  = 0 <-> jugando
     mov al, 7                            ;; codigo asignado al color gris
@@ -298,15 +402,33 @@ playGame proc far c use eax ebx ecx edx esi edi
         mov ah, 0
         int 1ah
         cmp dx, bx
-        jle 
+        jle _levelRef
         mov dCtTime, dx                 ;; actualiza el número de ticks
+        inc actualTime                  ;; aumenta el numero de segundos
+        call timeComposing              ;; compone el contador a la forma hh:mm:ss
         ;--------------------------------------------------
         ; Actualiza el nivel
         ;--------------------------------------------------
         _levelRef:
             mov bx, actualTime
+            cmp bx, actualLvlDur
+            jl _putNewObs               ;; salta a la sig acción
+            mov si, actualLevel
+            cmp si, 6
+            jz                          ;; si es igual a 6, se salta a game over
+            shl si, 1                   ;; lo multiplica por dos
+            inc si                      ;; obtiene el idx para levelsInfo
+            mov ax, levelsInfo[si]      ;; obtiene el valor para la dur del sig nivel
+            add bx, ax
+            mov actualLvlDur, bx        ;; actualiza la duración de nivel
+            inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
         ; Coloca un nuevo obstaculo
+        ;--------------------------------------------------
+        _putNewObs:
+
+        ;--------------------------------------------------
+        ; Check score
         ;--------------------------------------------------
         ;--------------------------------------------------
         ; Lee el teclado

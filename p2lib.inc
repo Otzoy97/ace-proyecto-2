@@ -13,4 +13,6 @@ externdef levelsInfo:byte
 externdef penaltyScore:word
 externdef rewardScore:word
 externdef actualUser:byte
+externdef userStr:byte
+externdef lvlStr:byte
 @curseg ends
