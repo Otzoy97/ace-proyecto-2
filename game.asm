@@ -68,6 +68,7 @@ endm
                     db "          " ;; nivel 5
                     db "          " ;; nivel 6
     randomSeed      dw ?
+    gameloaded      db ?
     ;--------------------------------------------------
     ; Datos del juego actual
     ;--------------------------------------------------
@@ -129,6 +130,13 @@ initGame proc far c
         cmp ax, 1
         ret
 initGame endp
+
+;--------------------------------------------------
+loadGame proc far c uses eax ebx ecx edx esi edi, namefile : ptr word
+; Solicita la ruta de un archivo que deberá contener
+; la información del juego
+;--------------------------------------------------
+loadGame endp
 
 ;--------------------------------------------------
 printHeader proc near c uses eax ebx ecx edx esi edi

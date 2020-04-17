@@ -19,6 +19,23 @@ LOCAL _1, _2
     POP AX
 ENDM
 
+;--------------------------------------------------
+getFileLength macro fileHandler
+; recupera el largo del archivo
+;--------------------------------------------------
+    push cx
+    push dx
+    push bx
+    mov ax, 4202h
+    xor cx, cx
+    xor dx, dx
+    mov bx, fileHandler
+    int 21h
+    pop bx
+    pop dx
+    pop cx
+endm
+
 contarRep MACRO varOffset
     xor si, si
     mov bx, offset varOffset

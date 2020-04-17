@@ -96,3 +96,73 @@ flushStr macro  char_cte, size_cte, char
     pop cx
     pop si
 endm
+
+compareStr MACRO charAC, charAR
+LOCAL _1, _2, _3, _4, _5, _6, _7, _8, _9
+    PUSH SI
+    PUSH CX
+    PUSH AX
+    XOR SI, SI
+    XOR CX, CX
+    MOV AL, 01H
+    _1:
+        CMP charAC[SI], 24H
+        JE _2
+        CMP charAC[SI], 00H
+        JE _2
+        INC SI
+        INC CL
+        JMP _1
+    _2:
+        XOR SI, SI
+    _3:
+        CMP charAR[SI], 24H
+        JE _4
+        CMP charAR[SI], 00H
+        JE _4
+        INC SI
+        INC CH
+        JMP _3
+    _4:
+        XOR SI, SI
+    _5:
+        CMP CL, CH
+        JNE _8
+    _6:
+        CMP CL, 00H
+        JE _9
+    _7:
+        MOV AH, charAC[SI]
+        CMP AH, charAR[SI]
+        JNE _8
+        INC SI
+        DEC CL
+        JMP _6
+    _8:
+        MOV AL, 00H
+    _9:
+        CMP AL, 01H
+        POP AX
+        POP CX
+        POP SI
+ENDM
+
+toLower MACRO charAC
+LOCAL _1, _2, _3, _4
+    PUSH SI
+    XOR SI, SI
+    _1:
+        CMP charAC[SI], 24H ;ES IGUAL A '$'   
+        JE _4               
+        CMP charAC[SI], 00H ;ES IGUAL A NULL
+        JE _4
+    _2:
+        CMP charAC[SI], 61h ;
+        JAE _3              ;SI ES MAYOR O IGUAL A 
+        ADD charAC[SI], 20h
+    _3:
+        INC SI
+        JMP _1
+    _4:
+        POP SI
+ENDM
