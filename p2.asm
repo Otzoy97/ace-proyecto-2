@@ -2,32 +2,14 @@
 .386
 ;--------------------------------------------------
 .stack 400h
-include p2lib.inc
+;include p2lib.inc
 include string.asm
-clearScreen macro
-    push ax
-    push cx
-    mov ah, 2
-    mov dx, 0
-    int 10h
-    mov ah, 9
-    mov al, 0
-    mov bl, 7
-    mov cx, 0fa0h
-    int 10h
-    pop cx
-    pop ax
-endm
-pauseAnyKey macro
-    push ax
-    printStr pressanykey
-    mov ah, 08h
-    int 21h 
-    pop ax
-endm
+include fileH.asm
+include screen.asm
+headerMain proto near c col : byte, row : byte, txtoff : ptr word, sizetxt : word
 ;--------------------------------------------------
 .data
-array   dw  6,8,4,0,1,9,7
+array           dw  6,8,4,0,1,9,7
 ln              db  "$"
 ;--------------------------------------------------
 ; LOGIN
@@ -35,11 +17,15 @@ ln              db  "$"
 mainmenu        db  "  (1) Ingresar", 0ah, 0dh
                 db  "  (2) Registrar", 0ah, 0dh
                 db  "  (3) Salir", 0ah, 0dh, 0ah, 0dh
-                db  "  Elija una opción : $"
-mainmenu1       db  "  Usuario : "
-mainmenu2       db  "  Contrase", 164,"a : "
-mainmenu3       db  "  Usuario registrado exitosamente"
-mainmenu3       db  "  Usuario/contrase", 164,"a no existe"
+                db  "  Elija una opci", 162,"n : $"
+mainmenu1       db  "  Usuario : $"
+mainmenu2       db  "  Contrase", 164,"a : $"
+mainmenu3       db  "  Usuario registrado exitosamente$"
+mainmenu4       db  "  Usuario/contrase", 164,"a no existe$"
+mainmenu8       db  "  Usuario ya existe$"
+mainmenu5       db  "PROYECTO FINAL$"     ;; 14
+mainmenu6       db  "INICIAR SESION$"     ;; 14
+mainmenu7       db  "REGISTRAR  USUARIO$" ;; 18
 usernameTemp    db  80 dup(?)
 passwordTemp    db  80 dup(?)
 ;--------------------------------------------------
@@ -62,7 +48,7 @@ userOp          db  " 1) Iniciar juego", 0ah, 0dh
 adminOp         db  " 1) Top 10 (punteo)", 0ah, 0dh
                 db  " 2) Top 10 (tiempo)", 0ah, 0dh
                 db  " 3) Salir", 0ah, 0dh, '$'
-chooseOp        db  " Elija una opción : $"
+chooseOp        db  " Elija una opci", 162,"n : $"
 strVar          db  80 dup(0)
 cte1            db  "1$"
 cte2            db  "2$"
@@ -70,7 +56,7 @@ cte3            db  "3$"
 cte4            db  "4$"
 pressanykey     db  " Presione cualquier tecla para continuar...$"
 strBuffer       db  80 dup(0)
-userFile        db  "usr.tzy"
+userFile        db  "usr.tzy",00
 fileHandler     dw  ?   
 fileBuffChar    db  ? 
 ;--------------------------------------------------
@@ -78,10 +64,11 @@ fileBuffChar    db  ?
 .startup
     mov ax, @data
     mov ds, ax
-main proc
+main proc near c
     _mainStart:
         clearScreen                             ;; limpia la pantalla
-        printStr mainmenu                       ;; muestra las opciones disponibles
+        invoke headerMain, 0, 9, offset mainmenu5, 33     ;; imprime en [9][0]
+        printStr offset mainmenu                       ;; muestra las opciones disponibles
         flushStr strVar, 80, 0
         getLine strVar                          ;; recupera la opción del usuario
         compareStr strVar, cte1
@@ -94,121 +81,142 @@ main proc
         jmp _mainStart
     _mainLogin:
         clearScreen
-        printStrln ln
-        printStr mainmenu1
+        invoke headerMain, 0, 9, offset mainmenu6, 33
+        printStr offset mainmenu1
         flushStr usernameTemp, 10, 0
         flushStr passwordTemp, 10, 0
         getLine usernameTemp
-        printStrln ln
-        printStr mainmenu2
+        printStrln offset ln
+        printStr offset mainmenu2
         getLine passwordTemp
         compareStr userAdmin, usernameTemp
         jnz _mainLoginUsr
         compareStr userAdmin, usernameTemp
         jnz _mainLoginUsr
-            call mainAdmin
+            ;call mainAdmin
         jmp _mainStart
         _mainLoginUsr:
             call validateLogin
             .if (ax == 1)                       ;; si es igual a 1, existe el usuario y contraseña
-                call mainUser 
+                ;call mainUser 
             .else
-                printStrln mainmenu3
-                pauseAnyKey                    
+                printStrln offset mainmenu4
+                pauseAnyKey                 
             .endif
-            jmp _mainLogin
-    _mainSignup
+            jmp _mainStart
+    _mainSignup:
         clearScreen
-        printStrln
-        printStrln mainmenu1
+        invoke headerMain,0,9,offset mainmenu7,31
+        printStr offset mainmenu1
         flushStr usernameTemp, 10, 0
         flushStr passwordTemp, 10, 0
         getLine usernameTemp
-        printStrln
-        printStr mainmenu2
+        printStrln offset ln
+        printStr offset mainmenu2
         getLine passwordTemp
         call validateLogin
         .if (ax == 0)                           ;; usuario no coincide == usuario disponible
-            ;; call signUp
+            call signup
+        .else 
+            printStrln offset mainmenu8
+            pauseAnyKey
         .endif
         jmp _mainStart
     _endMain:
+        clearScreen
         mov ax, 4c00h
         int 21h
 main endp
+
+headerMain proc near c uses eax ecx edx, col : byte, row : byte, txtoff : ptr word, sizetxt : word
+    clearScreen
+    mov ah, 02h
+    xor bx, bx
+    mov dh, row
+    mov dl, col
+    int 10h                 ;; posiciona el cursor
+    mov cx, sizetxt         ;; imprime la parte inicial del borde
+    _headerM1:
+        printChar 205
+        loop _headerM1
+    printStr txtoff         ;; imprime el texto 
+    mov cx, sizetxt         ;; imprime la parte final del borde
+    _headerM2:
+        printChar 205
+        loop _headerM2
+    ret
+headerMain endp
 
 ;--------------------------------------------------
 validateLogin proc near c uses ecx edx esi edi
 ; Abre el archivo de usuarios y busca una coincidencia
 ; con el nombre de usuario dado
-; El resultado se almacena en ax ax = 0 usuario no coincide, 1 coincide, 2 contraseña y usuario no coincide
+; El resultado se almacena en ax ax = 0 usuario no coincide, 1 coincide; 2 contraseña no coincide y usuario coincide
 ;--------------------------------------------------
     local lenFile : word, i : word, flag : byte
     mov i, 0
     mov lenFile, 0
     mov flag, 0
     openFile userFile, fileHandler
-    getFileLength fileHandler
-    mov lenFile, ax                             ;; recupera el largo del archivo
-    mov cx, i
-    mov ax, 4200h
-    xor cx, cx
-    xor dx, dx
-    int 21h                                     ;; reestablece el puntero del archivo
-    xor di, di
-    xor si, si
     mov fileBuffChar, 0
     flushStr strBuffer, 80, 0                   ;; servirá para almacenar la info leída desde el archivo
-    .while (cx < lenFile)                       ;; mientras haya caracter para leer
+    _validateLogin1:                            ;; buscará coincidencia con el nombre de usuario
         readFile fileHandler, fileBuffChar, 1   ;; recupera un caracter del archivo
+        printChar fileBuffChar
         mov al, fileBuffChar
-        .if ( al == 59 )                        ;; punto y coma
-            compareStr strBuffer, usernameTemp
-            .if (zero?)                         ;; si son iguales
-                mov flag, 1                     ;; flag = 1 // true
-                xor si, si                      ;; reinicia el indice para el buffer
-                .break                          ;; termina el loop
-            .else                               ;; no son iguales
-                flushStr strBuffer, 80, 0       ;; limpia el buffer
-                xor si, si                      ;; reinicia el indice para el buffer
-            .endif
-        .elseif ( al == 0ah || al == 0dh )      ;; es salto de linea/retorno de carro
-            flushStr strBuffer, 80, 0           ;; limpia el buffer
-            xor si, si                          ;; reinicia el indice para el buffer
-        .else 
-            mov strBuffer[si], al               ;; mueve el caracter recuperado al buffer
-            inc si                              ;; aumenta el indice del buffer
-        .endif
-        inc i                                   ;; aumenta el contador
-        mov cx, i
-    .endw
-    mov ax, flag                                ;; recupera el valor en flag
-    .if (ax == 1)                               ;; se encontró una coincidencia
-        .while (cx < lenFile)                       ;; mientras haya caracter para leer
-            readFile fileHandler, fileBuffChar, 1   ;; recupera un caracter del archivo
-            mov bl, fileBuffChar
-            .if ( bl == 0ah || bl == 0dh )          ;; llegó al final de la línea
-                compareStr strBuffer, passwordTemp  ;; compara la contraseña
-                .if (zero?)     
-                    mov flag, 1                     ;; es igual
-                .else
-                    mov flag, 2                       ;; no es igual
-                .endif
-                .break
-            .else 
-                mov strBuffer[si], bl               ;; mueve el caracter recuperado al buffer
-                inc si                              ;; aumenta el indice del buffer
-            .endif
-            inc i                                   ;; aumenta el contador
-            mov cx, i
-        .endw
-    .endif                                      ;; no se encontró coincidencia
-    closeFile fileHandler
+        cmp al, -1                              ;; es fin de archivo
+        jnz _validateLogin2
+        jmp _validateLogin5                     ;; termina el ciclo
+        _validateLogin2:
+            cmp al, 59                          ;; es separación de contraseña
+            jnz _validateLogin3
+            compareStr strBuffer, usernameTemp  ;; compara las cadenas
+            jnz _validateLogin1                 ;; continúa con el ciclo
+            mov flag, 1                         ;; usuario coincide
+            flushStr strBuffer, 80, 0           ;; limpia el buffer auxiliar
+            jmp _validateLogin5                 ;; termina el ciclo
+        _validateLogin3:
+            cmp al, 10                          ;; es final de linea
+            jnz _validateLogin4                 ;; continúa con el ciclo
+            flushStr strbuffer, 80, 0           ;; limpia el buffer auxiliar
+            jmp _validateLogin1                 ;; continua con el ciclo
+        _validateLogin4:                        
+            mov strBuffer[si], al               ;; guarda el caracter leído
+            inc si                              ;; incrementa el indice
+            jmp _validateLogin1                 ;; continua con el ciclo
+    _validateLogin5:
+        xor si, si
+        flushStr strbuffer, 80, 0               ;; limpia el buffer auxiliar
+    movsx ax, flag
+    cmp ax, 1
+    jnz _validateLogin9                         ;; termina el procedimiento
+    mov flag, 2                                 ;; usuario coincide , contraseña no coincide
+    _validateLogin6:
+        readFile fileHandler, fileBuffChar, 1   ;; recupera un caracter del archivo
+        printChar fileBuffChar
+        mov al, fileBuffChar
+        cmp al, -1                              ;; es fin de archivo
+        jnz _validateLogin7                     ;; continúa el ciclo
+        jmp _validateLogin9                     ;; termina el ciclo
+        _validateLogin7:
+            cmp al, 10                          ;; es final de linea
+            jnz _validateLogin8                 ;; continúa el ciclo
+            compareStr strBuffer, passwordTemp  ;; compara las cadenas
+            jnz _validateLogin9                 ;; termina el ciclo
+            mov flag, 1                         ;; ambas cadenas son iguales
+            jmp _validateLogin9                  ;; termina el ciclo
+        _validateLogin8:
+            mov strBuffer[si], al               ;; guarda el caracter leído
+            inc si                              ;; incrementa el indice
+            jmp _validateLogin6                 ;; continúa con el ciclo
+    _validateLogin9:
+        closeFile fileHandler
+        movsx ax, flag                          ;; mueve el resultado de flag a ax
     ret
 validateLogin endp
 
 ;--------------------------------------------------
-singup proc near c uses ebx ecx edx esi edi
+signup proc near c uses ebx ecx edx esi edi
 ; Abre el archivo de usuario y busca una coincidencia
 ; con el nombre de usuario dado
 ; el resultado se almacena en ax, 0 no coincide, 1 si coincide
@@ -217,9 +225,38 @@ singup proc near c uses ebx ecx edx esi edi
     mov lenFile, 0
     openFile userFile, fileHandler
     getFileLength fileHandler
-    ;; colocar cursor al final del archivo
-    ;; escribir username y password (de forma que no existe espacios o que no exceda 10 caracteres)
-    ;; colocar en medio de username y password una coma
+    mov cx, 10
+    xor si, si
+    _writeUser:                             ;; escribe el nombre de usuario
+        mov al, usernameTemp[si]
+        cmp al, 32                          ;; si es un espacio, no lo escribe
+        jz _writeUserIncSi
+        cmp al, 0                           ;; si es un nulo, no lo escribe
+        jz _writeUserIncSi
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        _writeUserIncSi:
+            inc si
+            loop _writeUser
+    mov fileBuffChar, 59
+    writeFile fileHandler, fileBuffChar, 1  ;; escribe un punto y coma
+    mov cx, 10
+    xor si, si
+    _writePass:                             ;; escribe la contraseña del usuario
+        mov al, passwordTemp[si]
+        cmp al, 32                          ;; si es un espacio, no lo escribe
+        jz _writePassIncSi
+        cmp al, 0                           ;; si es un nulo, no lo escribe
+        jz _writePassIncSi
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        _writePassIncSi:
+            inc si
+            loop _writePass
+    mov fileBuffChar, 0ah
+    writeFile fileHandler, fileBuffChar, 1  ;; escribe un nueva línea
+    closeFile fileHandler
+    printStrln mainmenu3
     ret
 signup endp
 
@@ -228,7 +265,7 @@ end
 
     ; call videoStart
     ; call initGame
-    _1:
+    ;_1:
         ; call clearScreen
         ; call initPrint        
         ; call printFrame
@@ -242,7 +279,7 @@ end
         ; int 16h
         ; jnz _2
         ; jmp _1
-    _2:
+    ;_2:
         ; call clearScreen
         ; call syncBuffer
         ; call videoStop

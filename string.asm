@@ -21,7 +21,7 @@ printStr macro charArray
     push ax
     push dx
     mov ah, 09h
-    mov dx, offset charArray
+    mov dx, charArray
     int 21h
     pop dx
     pop ax
@@ -35,7 +35,7 @@ printStrln macro charArray
     push ax
     push dx
     mov ah, 09h
-    mov dx, offset charArray
+    mov dx, charArray
     int 21h
     mov dx, 0ah
     mov ah, 2
@@ -84,7 +84,7 @@ flushStr macro  char_cte, size_cte, char
 ; Llena de un mismo caracter 'char' la cadena de caracteres
 ; especificada en 'char_cte'
 ;--------------------------------------------------
-    local _1:
+    local _1
     push si
     push cx
     xor si, si
