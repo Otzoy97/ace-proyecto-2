@@ -40,8 +40,8 @@ header          db  "UNIVERSIDAD DE SAN CARLOS DE GUATEMALA", 0ah, 0dh
                 db  "CIENCIAS Y SISTEMAS", 0ah, 0dh
                 db  "ARQUITECTURA DE COMPUTADORES Y ENSAMBLADORES 1", 0ah, 0dh
                 db  "ALUMNO: SERGIO FERNANDO OTZOY GONZALEZ", 0ah, 0dh
-                db  "CARNÉ: 201602782", 0ah, 0dh
-                db  "SECCIÓN: A", 0ah, 0ah, 0dh, '$'
+                db  "CARN", 144,": 201602782", 0ah, 0dh
+                db  "SECCI",162,"N: A", 0ah, 0ah, 0dh, '$'
 userOp          db  " 1) Iniciar juego", 0ah, 0dh
                 db  " 2) Cargar juego", 0ah, 0dh
                 db  " 3) Salir", 0ah, 0dh, '$'
@@ -49,12 +49,16 @@ adminOp         db  " 1) Top 10 (punteo)", 0ah, 0dh
                 db  " 2) Top 10 (tiempo)", 0ah, 0dh
                 db  " 3) Salir", 0ah, 0dh, '$'
 chooseOp        db  " Elija una opci", 162,"n : $"
+setFileName     db  " Escriba el nombre del archivo .ply : $"
+wrongExtFile    db  " Archivo inv", 160,"lido. No coincide la extensi", 162, "n$"
 strVar          db  80 dup(0)
 cte1            db  "1$"
 cte2            db  "2$"
 cte3            db  "3$"
 cte4            db  "4$"
+cte5            db  "ply$"
 pressanykey     db  " Presione cualquier tecla para continuar...$"
+wrongOpt        db  " Opci",162,"n no v",160,"lida$"
 strBuffer       db  80 dup(0)
 userFile        db  "usr.tzy",00
 fileHandler     dw  ?   
@@ -98,7 +102,7 @@ main proc near c
         _mainLoginUsr:
             call validateLogin
             .if (ax == 1)                       ;; si es igual a 1, existe el usuario y contraseña
-                ;call mainUser 
+                call mainUser 
             .else
                 printStrln offset mainmenu4
                 pauseAnyKey                 
@@ -119,8 +123,8 @@ main proc near c
             call signup
         .else 
             printStrln offset mainmenu8
-            pauseAnyKey
         .endif
+        pauseAnyKey
         jmp _mainStart
     _endMain:
         clearScreen
@@ -128,7 +132,10 @@ main proc near c
         int 21h
 main endp
 
+;--------------------------------------------------
 headerMain proc near c uses eax ecx edx, col : byte, row : byte, txtoff : ptr word, sizetxt : word
+; Imprime un encabezado para las primeras pantallas 
+;--------------------------------------------------
     clearScreen
     mov ah, 02h
     xor bx, bx
@@ -148,6 +155,56 @@ headerMain proc near c uses eax ecx edx, col : byte, row : byte, txtoff : ptr wo
 headerMain endp
 
 ;--------------------------------------------------
+mainUser proc near c
+; Menú principal para el usuario normal
+;--------------------------------------------------
+    mov cx, 10
+    xor si, si
+    ;_setUserName:
+        ;mov al, usernameTemp[si]
+        ;cmp al, 0
+        ;jz _mainUser1
+        ;mov userStr[si], al
+        ;_setUserNameIncSi:
+        ;    inc si
+        ;loop _setUserName
+    _mainUser1:
+        clearScreen
+        printStr offset header
+        printStrln offset userOp
+        printStr offset chooseOp
+        flushStr strVar, 80, 0
+        getLine strVar
+        compareStr cte1, strVar
+        jz _mainUser2                           ;; jugar
+        compareStr cte2, strVar
+        jz _mainUser3                           ;; cargar
+        compareStr cte3, strVar
+        jz _mainUser4                           ;; salir
+        printStrln wrongOpt                     ;; opción inválida
+        pauseAnyKey
+        jmp _mainUser1
+    _mainUser2:                                 ;; jugar
+        jmp _mainUser1
+    _mainUser3:                                 ;; cargar
+        printStrln offset ln
+        printStr offset setFileName
+        flushStr strVar, 80, 0
+        getLine strVar
+        call validateFile
+        compareStr strBuffer, cte5              ;; compara la extensión
+        jz _mainUser31
+        printStr offset wrongExtFile                   ;; extensión inválida
+        pauseAnyKey
+        jmp _mainUser1
+        _mainUser31:
+            pauseAnyKey
+            jmp _mainUser1
+    _mainUser4:
+    ret
+mainUser endp
+
+;--------------------------------------------------
 validateLogin proc near c uses ecx edx esi edi
 ; Abre el archivo de usuarios y busca una coincidencia
 ; con el nombre de usuario dado
@@ -162,11 +219,9 @@ validateLogin proc near c uses ecx edx esi edi
     flushStr strBuffer, 80, 0                   ;; servirá para almacenar la info leída desde el archivo
     _validateLogin1:                            ;; buscará coincidencia con el nombre de usuario
         readFile fileHandler, fileBuffChar, 1   ;; recupera un caracter del archivo
-        printChar fileBuffChar
+        cmp ax, 0                               ;; determina cuántos bytes se transfirieron
+        jz _validateLogin5
         mov al, fileBuffChar
-        cmp al, -1                              ;; es fin de archivo
-        jnz _validateLogin2
-        jmp _validateLogin5                     ;; termina el ciclo
         _validateLogin2:
             cmp al, 59                          ;; es separación de contraseña
             jnz _validateLogin3
@@ -256,9 +311,40 @@ signup proc near c uses ebx ecx edx esi edi
     mov fileBuffChar, 0ah
     writeFile fileHandler, fileBuffChar, 1  ;; escribe un nueva línea
     closeFile fileHandler
-    printStrln mainmenu3
+    printStrln offset mainmenu3
     ret
 signup endp
+
+;--------------------------------------------------
+validateFile proc near c uses eax ebx ecx edx esi edi
+; Recupera la extensión del nombre del archivo alojado en
+; la variable strVar y la copia a strBuffer. 
+;--------------------------------------------------
+    xor cx, cx
+    xor si, si
+    xor di, di
+    flushStr strBuffer, 80, 0
+    mov cx, 10
+    _validateFile1:
+        mov al, strVar[si]
+        cmp al, '.'                       ;; termina el proceso
+        jz _validateFile2
+        inc si
+        loop _validateFile1
+    _validateFile2:
+        inc si
+        mov cx, 3
+    _validateFile3:
+        mov al, strVar[si]
+        cmp al, 0   
+        jz _validateFile4                 ;; termina el proceso
+        mov strBuffer[di], al
+        inc si
+        inc di
+        loop _validateFile3               ;; copia la extensión
+    _validateFile4:
+    ret
+validateFile endp
 
 end
 
