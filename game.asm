@@ -54,7 +54,7 @@ endm
     headerG         db " "
     userStr         db "user1     "
     levelStr        db "n1        "
-    scoreStr        db "000       " 
+    scoreStr        db "          "
     horaG           db "00:"
     minuG           db "00:"
     segsG           db "00 "
@@ -72,10 +72,9 @@ endm
     ;--------------------------------------------------
     ; Datos del juego actual
     ;--------------------------------------------------
-    levelsInfo      db 12 dup(0)
+    levelsInfo      db 1,0,2,0,3,0,4,0,5,0,6,0
     penaltyScore    dw ?                 ;; indicará cuantos pts perderá por bloque enemigo
     rewardScore     dw ?                 ;; indicará cuantos pts ganará por bloque amigo
-    actualUser      db dup(7)            ;; cadena <-> usuario que juega
     actualLevel     db 1                 ;; número <-> nivel actual 
     actualScore     dw 3                 ;; número <-> punteo actual
     actualTime      dw 0                 ;; número <-> seg jugando
@@ -400,7 +399,7 @@ playGame proc far c use eax ebx ecx edx esi edi
     mov cx, 32400
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
-    call printFrame                      ;; pinra el marco del juego
+    call printFrame                      ;; pinta el marco del juego
     _playThread:
         ;--------------------------------------------------
         ; Actualiza el contador de tiempo
