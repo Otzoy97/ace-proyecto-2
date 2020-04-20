@@ -97,7 +97,7 @@ ENDM
 
 readFile MACRO fileHandler, fileContent, fileSize
 LOCAL _1
-    PUSH AX
+    ;PUSH AX
     PUSH BX
     PUSH CX
     MOV AH, 3FH
@@ -111,6 +111,6 @@ LOCAL _1
     _1:
     POP CX
     POP BX
-    POP AX
+    ;POP AX
 ENDM
 
