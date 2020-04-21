@@ -5,6 +5,62 @@ include p2lib.inc
 include fileH.asm
 include string.asm
 
+.data
+    ;--------------------------------------------------
+    ; Elementos generales
+    ;--------------------------------------------------
+    pointc          dw 137               ;; posición inicial 137 (columna)
+    vram            dw ?                 ;; almacena el offset del doble buffer para el fondo del juego
+    car             db 1800 dup(0)       ;; 
+    good            db 900 dup(0)        ;; 
+    bad             db 900 dup(0)        ;; 
+    carFN           db "car.otz", 00     ;; archivo que DEBE de existir
+    goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
+    badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
+    fileHandler     dw ?                 ;; manejador de archivo
+    headerG         db " "
+    userStr         db "user1     "
+    levelStr        db "n1        "
+    scoreStr        db "          "
+    horaG           db "00:"
+    minuG           db "00:"
+    segsG           db "00 "
+    bottomP         db "                  PLAY                  "
+    bottomU         db "                  PAUSE                 "
+    bottomG         db "                GAME OVER               "
+    lvlStr          db "          " ;; nivel 1
+                    db "          " ;; nivel 2
+                    db "          " ;; nivel 3
+                    db "          " ;; nivel 4
+                    db "          " ;; nivel 5
+                    db "          " ;; nivel 6
+    randomSeed      dw ?
+    gameloaded      db 0
+    lvlsName        db 60 dup(0)    ;; almacenará el nombre de los niveles
+    lvlsDur         db 6 dup(0)     ;; almacenará la duración de cada nivel
+    lvlsPenalty     db 6 dup(0)      ;; almacenará los puntos negativos
+    lvlsScore       db 6 dup(0)     ;; almacenará los puntos positivos
+    lvlsPenDur      db 6 dup(0)     ;; almacenará el temporizador para los bloque negativos
+    lvlsScoDur      db 6 dup(0)     ;; almacenará el temporizador para los bloques positivos
+    tempNumber      dw ?            ;; var auxiliar para el manejo de numeros
+    strBuff         db 10 dup(0)    ;; var auxiliar para el manejo de números
+    ;--------------------------------------------------
+    ; Datos del nivel actual
+    ;--------------------------------------------------
+    penaltyScore    dw ?            ;; indicará cuantos pts perderá por bloque enemigo
+    rewardScore     dw ?            ;; indicará cuantos pts ganará por bloque amigo
+    penaltyScoreDur dw ?            ;; indicará el temporizador para el bloque enemigo
+    rewardScoreDur  dw ?            ;; indicará el temporizador para el bloque enemigo
+    actualLevel     db 1            ;; número <-> nivel actual 
+    ;--------------------------------------------------
+    ; Datos del juego actual
+    ;--------------------------------------------------
+    actualScore     dw 3            ;; número <-> punteo actual
+    actualTime      dw 0            ;; número <-> seg jugando
+    actualLvlDur    dw ?            ;; número <-> duración nivel actual
+    playState       db ?            ;; indica el estado actual del juego
+.code
+
 ;--------------------------------------------------
 toAsciiT macro fromVar, toVar
 ; Comvierte a ascii la hora dada por la variables con offset toVar
@@ -38,49 +94,29 @@ toAsciiT macro fromVar, toVar
     popad
 endm
 
-.data
-    ;--------------------------------------------------
-    ; Elementos generales
-    ;--------------------------------------------------
-    pointc          dw 137               ;; posición inicial 137 (columna)
-    vram            dw ?                 ;; almacena el offset del doble buffer para el fondo del juego
-    car             db 1800 dup(0)       ;; 
-    good            db 900 dup(0)        ;; 
-    bad             db 900 dup(0)        ;; 
-    carFN           db "car.otz", 00     ;; archivo que DEBE de existir
-    goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
-    badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
-    fileHandler     dw ?                 ;; manejador de archivo
-    headerG         db " "
-    userStr         db "user1     "
-    levelStr        db "n1        "
-    scoreStr        db "          "
-    horaG           db "00:"
-    minuG           db "00:"
-    segsG           db "00 "
-    bottomP         db "                  play                  "
-    bottomU         db "                  pause                 "
-    bottomG         db "                game over               "
-    lvlStr          db "          " ;; nivel 1
-                    db "          " ;; nivel 2
-                    db "          " ;; nivel 3
-                    db "          " ;; nivel 4
-                    db "          " ;; nivel 5
-                    db "          " ;; nivel 6
-    randomSeed      dw ?
-    gameloaded      db ?
-    ;--------------------------------------------------
-    ; Datos del juego actual
-    ;--------------------------------------------------
-    levelsInfo      db 1,0,2,0,3,0,4,0,5,0,6,0
-    penaltyScore    dw ?                 ;; indicará cuantos pts perderá por bloque enemigo
-    rewardScore     dw ?                 ;; indicará cuantos pts ganará por bloque amigo
-    actualLevel     db 1                 ;; número <-> nivel actual 
-    actualScore     dw 3                 ;; número <-> punteo actual
-    actualTime      dw 0                 ;; número <-> seg jugando
-    actualLvlDur    dw ?                 ;; número <-> duración nivel actual
-    playState       db ?                 ;; indica el estado actual del juego
-.code
+;--------------------------------------------------
+validateNumber proc near c uses eax ebx, charrOff : word
+; Convierte un número ascci en un número real
+;--------------------------------------------------
+    local temp : word
+    mov temp, 0                     ;; inicializa la variable local
+    mov si, charrOff                ;; establece el offset para es
+    .while (es:[si] >= '0' && es:[si]  <= '9')
+        mov ax, temp                ;; recupera el valor de temp
+        shl ax, 1                   ;; multiplica por dos
+        mov bx, ax                  ;; almacena el valor anterior
+        shl ax, 2                   ;; multiplica por ocho
+        add ax, bx                  ;; suma ax y bx -> temp * 10
+        xor bx, bx                  ;; limpia bx
+        mov bl, es:[si]             ;; mueve el valor en es:[si]  a bl
+        sub bl, '0'                 ;; le resta el valor ascii de '0'
+        add ax, bx                  ;; y se le suma al valor alojado en ax
+        mov temp, ax                ;; guarda el valor en temp
+        inc si                      ;; incrementa el indice de origen
+    .endw
+    mov dx, temp
+    ret
+validateNumber endp
 
 ;--------------------------------------------------
 initGame proc far c
@@ -131,11 +167,81 @@ initGame proc far c
 initGame endp
 
 ;--------------------------------------------------
-loadGame proc far c uses eax ebx ecx edx esi edi, namefile : ptr word
+loadGame proc far c uses eax ebx ecx edx esi edi, namefile : word
+; nameFile : fileHandler
 ; Solicita la ruta de un archivo que deberá contener
 ; la información del juego
 ;--------------------------------------------------
+    local char : byte, charAux : word
+    mov ah, 48h
+    mov bx, 
+    _loadGame1:
+        getLine namefile, bufferLine      ;; recupera una línea de info
+        cmp ax, 0                   ;; determina si ya es fin de archivo
+        jz                          ;; terminó de leer el archivo
+        mov al, char                ;; recupera el caracter leído
+        cmp al, 0ah                 ;; determina si es final de línea
+    getLine nameFile                ;; recupera una linea
+    ret
 loadGame endp
+
+loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
+    local i : word, charAux : word, char : byte
+    mov char, 0
+    mov i, 0
+    mov charAux, 0
+    mov ah, 48h
+    mov bx, 5                       ;; 5 * 16 = 80 bytes
+    int 21h
+    mov charAux, ax                 ;; almacena dram
+    mov es, ax                      ;; inicializa data extra
+    mov cx, 80
+    xor di, di
+    _getLine0:
+        mov es:[di], 0
+        inc di
+        loop _getLine0
+    xor si, si
+    xor di, di
+    _getLine1:
+        readFile nameFile, char, 1  ;; lee un caracter
+        cmp ax, 0                   ;; se leyó algo?
+        jz _getLine                 ;; termina el procedimiento
+        mov al, char                ;; recupera el caracter leído
+        cmp al, 0ah                 ;; es final de línea?
+        jz _getLine3                ;; termina el ciclo actual
+        cmp al, 59                  ;; es un punto y coma
+        jnz _getLine2               ;; realiza un salto en dram
+        inc i                       ;; aumenta el contador
+        mov ax, i
+        shl ax, 1                   ;; lo multiplica por dos
+        mov bx, ax
+        shl ax, 2                   ;; los multiplica por ocho
+        add bx, ax                  ;; recupera el valor por 10
+        mov di, bx                  ;; especifica el nuevo indice
+        jmp _getLine1               ;; continua con el ciclo
+        _getLine2:
+        stosb                       ;; almacena el contenido de al en es:di
+        jmp _getLine1               ;; continúa el ciclo
+    _getLine3:
+        xor ax, ax
+        mov al, es:[10]             ;; recupera el nivel 
+        sub al, '0'                 ;; recupera el número
+        dec al                      ;; lo decrementa para obtener un índice válido
+        mov di, ax                  ;; establece el indice
+        invoke validateNumber, 20   ;; duración nivel
+        mov lvlsDur[di], dl
+        invoke validateNumber, 30   ;; tiempo obstáculos
+        mov lvlsPenDur[di], dl
+        invoke validateNumber, 40   ;; tiempo premio
+        mov lvlsScoDur[di], dl
+        invoke validateNumber, 50   ;; punteo obstáculos
+        mov lvlsPenalty[di], dl
+        invoke validateNumber, 60   ;; punteo premio
+        mov lvlsScore[di], dl
+
+    ret
+loadLine endp
 
 ;--------------------------------------------------
 printHeader proc near c uses eax ebx ecx edx esi edi
