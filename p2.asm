@@ -2,7 +2,7 @@
 .386
 ;--------------------------------------------------
 .stack 400h
-;include p2lib.inc
+include p2lib.inc
 include string.asm
 include fileH.asm
 include screen.asm
@@ -22,7 +22,7 @@ mainmenu1       db  "  Usuario : $"
 mainmenu2       db  "  Contrase", 164,"a : $"
 mainmenu3       db  "  Usuario registrado exitosamente$"
 mainmenu4       db  "  Usuario/contrase", 164,"a no existe$"
-mainmenu8       db  "  Usuario ya existe$"
+mainmenu8       db  "  No se puede registrar usuario. Usuario ya existe$"
 mainmenu5       db  "PROYECTO FINAL$"     ;; 14
 mainmenu6       db  "INICIAR SESION$"     ;; 14
 mainmenu7       db  "REGISTRAR  USUARIO$" ;; 18
@@ -36,29 +36,29 @@ passAdmin       db  "1234", 00
 ;--------------------------------------------------
 ; USUARIO
 ;--------------------------------------------------
-header          db  "UNIVERSIDAD DE SAN CARLOS DE GUATEMALA", 0ah, 0dh
-                db  "CIENCIAS Y SISTEMAS", 0ah, 0dh
-                db  "ARQUITECTURA DE COMPUTADORES Y ENSAMBLADORES 1", 0ah, 0dh
-                db  "ALUMNO: SERGIO FERNANDO OTZOY GONZALEZ", 0ah, 0dh
-                db  "CARN", 144,": 201602782", 0ah, 0dh
-                db  "SECCI",162,"N: A", 0ah, 0ah, 0dh, '$'
-userOp          db  " 1) Iniciar juego", 0ah, 0dh
-                db  " 2) Cargar juego", 0ah, 0dh
-                db  " 3) Salir", 0ah, 0dh, '$'
-adminOp         db  " 1) Top 10 (punteo)", 0ah, 0dh
-                db  " 2) Top 10 (tiempo)", 0ah, 0dh
-                db  " 3) Salir", 0ah, 0dh, '$'
-chooseOp        db  " Elija una opci", 162,"n : $"
-setFileName     db  " Escriba el nombre del archivo .ply : $"
-wrongExtFile    db  " Archivo inv", 160,"lido. No coincide la extensi", 162, "n$"
+header          db  " UNIVERSIDAD DE SAN CARLOS DE GUATEMALA", 0ah, 0dh
+                db  " CIENCIAS Y SISTEMAS", 0ah, 0dh
+                db  " ARQUITECTURA DE COMPUTADORES Y ENSAMBLADORES 1", 0ah, 0dh
+                db  " ALUMNO:  SERGIO FERNANDO OTZOY GONZALEZ", 0ah, 0dh
+                db  " CARNE:   201602782", 0ah, 0dh
+                db  " SECCION: A", 0ah, 0ah, 0dh, '$'
+userOp          db  "  1) Iniciar juego", 0ah, 0dh
+                db  "  2) Cargar juego", 0ah, 0dh
+                db  "  3) Salir", 0ah, 0dh, '$'
+adminOp         db  "  1) Top 10 (punteo)", 0ah, 0dh
+                db  "  2) Top 10 (tiempo)", 0ah, 0dh
+                db  "  3) Salir", 0ah, 0dh, '$'
+chooseOp        db  "  Elija una opci", 162,"n : $"
+setFileName     db  "  Escriba el nombre del archivo .ply : $"
+wrongExtFile    db  "  Archivo inv", 160,"lido. No coincide la extensi", 162, "n$"
 strVar          db  80 dup(0)
 cte1            db  "1$"
 cte2            db  "2$"
 cte3            db  "3$"
 cte4            db  "4$"
 cte5            db  "ply$"
-pressanykey     db  " Presione cualquier tecla para continuar...$"
-wrongOpt        db  " Opci",162,"n no v",160,"lida$"
+pressanykey     db  "  Presione cualquier tecla para continuar...$"
+wrongOpt        db  "  Opci",162,"n no v",160,"lida$"
 strBuffer       db  80 dup(0)
 userFile        db  "usr.tzy",00
 fileHandler     dw  ?   
@@ -81,6 +81,8 @@ main proc near c
         jz _mainSignup                           
         compareStr strVar, cte3
         jz _endMain
+        printStrln offset ln
+        printStrln offset wrongOpt
         pauseAnyKey
         jmp _mainStart
     _mainLogin:
@@ -104,6 +106,7 @@ main proc near c
             .if (ax == 1)                       ;; si es igual a 1, existe el usuario y contraseña
                 call mainUser 
             .else
+                printStrln offset ln
                 printStrln offset mainmenu4
                 pauseAnyKey                 
             .endif
@@ -122,6 +125,7 @@ main proc near c
         .if (ax == 0)                           ;; usuario no coincide == usuario disponible
             call signup
         .else 
+            printStrln offset ln
             printStrln offset mainmenu8
         .endif
         pauseAnyKey
@@ -181,7 +185,8 @@ mainUser proc near c
         jz _mainUser3                           ;; cargar
         compareStr cte3, strVar
         jz _mainUser4                           ;; salir
-        printStrln wrongOpt                     ;; opción inválida
+        printStrln offset ln
+        printStrln offset wrongOpt              ;; opción inválida
         pauseAnyKey
         jmp _mainUser1
     _mainUser2:                                 ;; jugar
@@ -194,10 +199,13 @@ mainUser proc near c
         call validateFile
         compareStr strBuffer, cte5              ;; compara la extensión
         jz _mainUser31
-        printStr offset wrongExtFile                   ;; extensión inválida
+        printStrln offset ln
+        printStrln offset wrongExtFile          ;; extensión inválida
         pauseAnyKey
         jmp _mainUser1
         _mainUser31:
+            openFile strVar, fileHandler        ;; abre el archivo
+            
             pauseAnyKey
             jmp _mainUser1
     _mainUser4:
@@ -208,11 +216,9 @@ mainUser endp
 validateLogin proc near c uses ecx edx esi edi
 ; Abre el archivo de usuarios y busca una coincidencia
 ; con el nombre de usuario dado
-; El resultado se almacena en ax ax = 0 usuario no coincide, 1 coincide; 2 contraseña no coincide y usuario coincide
+; El resultado se almacena en ax = 0 usuario no coincide, 1 coincide; 2 contraseña no coincide y usuario coincide
 ;--------------------------------------------------
-    local lenFile : word, i : word, flag : byte
-    mov i, 0
-    mov lenFile, 0
+    local flag : byte
     mov flag, 0
     openFile userFile, fileHandler
     mov fileBuffChar, 0
@@ -229,11 +235,13 @@ validateLogin proc near c uses ecx edx esi edi
             jnz _validateLogin1                 ;; continúa con el ciclo
             mov flag, 1                         ;; usuario coincide
             flushStr strBuffer, 80, 0           ;; limpia el buffer auxiliar
+            xor si, si
             jmp _validateLogin5                 ;; termina el ciclo
         _validateLogin3:
             cmp al, 10                          ;; es final de linea
             jnz _validateLogin4                 ;; continúa con el ciclo
             flushStr strbuffer, 80, 0           ;; limpia el buffer auxiliar
+            xor si, si
             jmp _validateLogin1                 ;; continua con el ciclo
         _validateLogin4:                        
             mov strBuffer[si], al               ;; guarda el caracter leído
@@ -248,11 +256,7 @@ validateLogin proc near c uses ecx edx esi edi
     mov flag, 2                                 ;; usuario coincide , contraseña no coincide
     _validateLogin6:
         readFile fileHandler, fileBuffChar, 1   ;; recupera un caracter del archivo
-        printChar fileBuffChar
         mov al, fileBuffChar
-        cmp al, -1                              ;; es fin de archivo
-        jnz _validateLogin7                     ;; continúa el ciclo
-        jmp _validateLogin9                     ;; termina el ciclo
         _validateLogin7:
             cmp al, 10                          ;; es final de linea
             jnz _validateLogin8                 ;; continúa el ciclo
@@ -311,6 +315,7 @@ signup proc near c uses ebx ecx edx esi edi
     mov fileBuffChar, 0ah
     writeFile fileHandler, fileBuffChar, 1  ;; escribe un nueva línea
     closeFile fileHandler
+    printStrln offset ln
     printStrln offset mainmenu3
     ret
 signup endp
@@ -333,7 +338,6 @@ validateFile proc near c uses eax ebx ecx edx esi edi
         loop _validateFile1
     _validateFile2:
         inc si
-        mov cx, 3
     _validateFile3:
         mov al, strVar[si]
         cmp al, 0   
@@ -341,7 +345,7 @@ validateFile proc near c uses eax ebx ecx edx esi edi
         mov strBuffer[di], al
         inc si
         inc di
-        loop _validateFile3               ;; copia la extensión
+        jmp _validateFile3               ;; copia la extensión
     _validateFile4:
     ret
 validateFile endp
