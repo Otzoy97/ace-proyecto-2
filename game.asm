@@ -17,6 +17,10 @@ include string.asm
     carFN           db "car.otz", 00     ;; archivo que DEBE de existir
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
+    rojoCte         db "rojo$"
+    verdeCte        db "verde$"
+    azulCte         db "azul$"
+    blancoCte       db "blanco$"
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
     userStr         db "user1     "
@@ -38,10 +42,11 @@ include string.asm
     gameloaded      db 0
     lvlsName        db 60 dup(0)    ;; almacenará el nombre de los niveles
     lvlsDur         db 6 dup(0)     ;; almacenará la duración de cada nivel
-    lvlsPenalty     db 6 dup(0)      ;; almacenará los puntos negativos
+    lvlsPenalty     db 6 dup(0)     ;; almacenará los puntos negativos
     lvlsScore       db 6 dup(0)     ;; almacenará los puntos positivos
     lvlsPenDur      db 6 dup(0)     ;; almacenará el temporizador para los bloque negativos
     lvlsScoDur      db 6 dup(0)     ;; almacenará el temporizador para los bloques positivos
+    lvlsColor       db 6 dup(0)     ;; almacena el literal que especifica el color del carro
     tempNumber      dw ?            ;; var auxiliar para el manejo de numeros
     strBuff         db 10 dup(0)    ;; var auxiliar para el manejo de números
     ;--------------------------------------------------
@@ -167,25 +172,19 @@ initGame proc far c
 initGame endp
 
 ;--------------------------------------------------
-loadGame proc far c uses eax ebx ecx edx esi edi, namefile : word
+setColor proc near c uses eax 
+; Lee el valor que especifica el color en el indice
+;--------------------------------------------------
+    
+    ret
+setColor endp
+
+;--------------------------------------------------
+loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
 ; nameFile : fileHandler
 ; Solicita la ruta de un archivo que deberá contener
 ; la información del juego
 ;--------------------------------------------------
-    local char : byte, charAux : word
-    mov ah, 48h
-    mov bx, 
-    _loadGame1:
-        getLine namefile, bufferLine      ;; recupera una línea de info
-        cmp ax, 0                   ;; determina si ya es fin de archivo
-        jz                          ;; terminó de leer el archivo
-        mov al, char                ;; recupera el caracter leído
-        cmp al, 0ah                 ;; determina si es final de línea
-    getLine nameFile                ;; recupera una linea
-    ret
-loadGame endp
-
-loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
     local i : word, charAux : word, char : byte
     mov char, 0
     mov i, 0
@@ -197,16 +196,16 @@ loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
     mov es, ax                      ;; inicializa data extra
     mov cx, 80
     xor di, di
-    _getLine0:
+    _getLine0:                      ;; llena de 0 la memoria alojada
         mov es:[di], 0
         inc di
         loop _getLine0
     xor si, si
     xor di, di
-    _getLine1:
+    _getLine1:                      ;; recupera una línea de información
         readFile nameFile, char, 1  ;; lee un caracter
         cmp ax, 0                   ;; se leyó algo?
-        jz _getLine                 ;; termina el procedimiento
+        jz _getLine6                ;; termina el procedimiento
         mov al, char                ;; recupera el caracter leído
         cmp al, 0ah                 ;; es final de línea?
         jz _getLine3                ;; termina el ciclo actual
@@ -223,7 +222,7 @@ loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
         _getLine2:
         stosb                       ;; almacena el contenido de al en es:di
         jmp _getLine1               ;; continúa el ciclo
-    _getLine3:
+    _getLine3:                      ;; llena las variables con la info recuperada
         xor ax, ax
         mov al, es:[10]             ;; recupera el nivel 
         sub al, '0'                 ;; recupera el número
@@ -239,6 +238,34 @@ loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
         mov lvlsPenalty[di], dl
         invoke validateNumber, 60   ;; punteo premio
         mov lvlsScore[di], dl
+        .if (es:[70] == 'r' || es:[70] == 'R')
+            mov al, 'r'
+        .elseif (es:[70] == 'v' || es:[70] == 'V')
+            mov al, 'v'
+        .elseif (es:[70] == 'a' || es:[70] == 'A')
+            mov al, 'a'
+        .elseif (es:[70] == 'b' || es:[70] == 'B')
+            mov al, 'b'
+        .endif
+        mov lvlsColor[di], al       ;; guarda el color del auto
+        shl di, 1                   ;; multiplica por dos
+        mov bx, di                  ;; guarda el valor di*2
+        shl di, 2                   ;; multiplica por ocho
+        add bx, di                  ;; obtiene di*10
+        cx, 10
+        xor si, si                  ;; la pos 0 contiene el nombre del nivel
+        _getLine4:                  ;; copia el nombre del nivel
+            mov al, es:[si]         ;; recupera un caracter
+            cmp al, 0               ;; es nulo?
+            jz _getLine5            ;; termina el ciclo
+            mov lvlStr[di], al      ;; almacena un caracter desde di
+            inc di
+            inc si
+            loop _getLine4          ;; repetir = 10
+        _getLine5:                  ;; repite el proceso
+            xor di, di
+            jmp _getLine0
+    _getLine6:
 
     ret
 loadLine endp
