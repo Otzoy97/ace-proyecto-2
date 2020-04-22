@@ -11,16 +11,12 @@ include string.asm
     ;--------------------------------------------------
     pointc          dw 137               ;; posición inicial 137 (columna)
     vram            dw ?                 ;; almacena el offset del doble buffer para el fondo del juego
-    car             db 1800 dup(0)       ;; 
-    good            db 900 dup(0)        ;; 
-    bad             db 900 dup(0)        ;; 
+    car             db 1800 dup(0)       ;; almacena el modelo del carro
+    good            db 900 dup(0)        ;; almacena el modelo del bloque bueno
+    bad             db 900 dup(0)        ;; almacena el modelo del bloque malo
     carFN           db "car.otz", 00     ;; archivo que DEBE de existir
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
-    rojoCte         db "rojo$"
-    verdeCte        db "verde$"
-    azulCte         db "azul$"
-    blancoCte       db "blanco$"
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
     userStr         db "user1     "
@@ -32,15 +28,9 @@ include string.asm
     bottomP         db "                  PLAY                  "
     bottomU         db "                  PAUSE                 "
     bottomG         db "                GAME OVER               "
-    lvlStr          db "          " ;; nivel 1
-                    db "          " ;; nivel 2
-                    db "          " ;; nivel 3
-                    db "          " ;; nivel 4
-                    db "          " ;; nivel 5
-                    db "          " ;; nivel 6
     randomSeed      dw ?
-    gameloaded      db 0
-    lvlsName        db 60 dup(0)    ;; almacenará el nombre de los niveles
+    gameloaded      db 0            ;; determina si ya se ha cargado el juego
+    lvlStr          db 60 dup(0)    ;; almacenará el nombre de los niveles
     lvlsDur         db 6 dup(0)     ;; almacenará la duración de cada nivel
     lvlsPenalty     db 6 dup(0)     ;; almacenará los puntos negativos
     lvlsScore       db 6 dup(0)     ;; almacenará los puntos positivos
@@ -172,40 +162,88 @@ initGame proc far c
 initGame endp
 
 ;--------------------------------------------------
-setColor proc near c uses eax 
-; Lee el valor que especifica el color en el indice
+setColor proc near c uses eax ebx ecx edx esi edi, idx : word
+; Modifica la paleta de colores dada el color
+; que se especifica en lvlsColor
 ;--------------------------------------------------
-    
+    local green : byte, red : byte, blue : byte
+    mov green, 0
+    mov red, 0
+    mov blue, 0
+    mov dx, 3c8h
+    mov al, 25
+    out dx, al
+    inc dx
+    mov si, idx
+    mov al, lvlsColor[si]           ;; recupera la literal
+    cmp al, 'r'
+    jz _rojo
+    cmp al, 'b'
+    jz _blanco
+    cmp al, 'v'
+    jz _verde
+    cmp al, 'a'
+    jz _azul
+    jmp _setColorEnd
+    _rojo:
+        mov red, 60
+        jmp _setColor1
+    _blanco:
+        mov green, 255
+        mov red, 255
+        mov blue, 255
+        jmp _setColor1
+    _azul:
+        mov blue, 60
+        jmp _setColor1
+    _verde:
+        mov green, 60
+    _setColor1:
+        mov al, red
+        out dx, al
+        mov al, green
+        out dx, al
+        mov al, blue
+        out dx, al
+    _setColorEnd:
     ret
 setColor endp
 
 ;--------------------------------------------------
-loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
+loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
 ; nameFile : fileHandler
 ; Solicita la ruta de un archivo que deberá contener
 ; la información del juego
 ;--------------------------------------------------
-    local i : word, charAux : word, char : byte
+    local i : word, charAux : word, char : byte, j : word
     mov char, 0
     mov i, 0
+    mov j, 0
     mov charAux, 0
     mov ah, 48h
     mov bx, 5                       ;; 5 * 16 = 80 bytes
     int 21h
     mov charAux, ax                 ;; almacena dram
     mov es, ax                      ;; inicializa data extra
-    mov cx, 80
+    mov cx, 80                      ;; establece el número de repeticiones para el loop
     xor di, di
     _getLine0:                      ;; llena de 0 la memoria alojada
         mov es:[di], 0
         inc di
         loop _getLine0
-    xor si, si
     xor di, di
     _getLine1:                      ;; recupera una línea de información
         readFile nameFile, char, 1  ;; lee un caracter
+        mov dx, j                   ;; determina si se ha reiniciado el indice (i)
+        cmp dx, 6               
+        jge _getLine6               ;; lee hasta 6 líneas
         cmp ax, 0                   ;; se leyó algo?
+        jnz _getLine11
+        mov dx, i
+        cmp dx, 0
         jz _getLine6                ;; termina el procedimiento
+        jnz _getLine3               ;; i != 0, hay info en charAux
+    _getLine11:                     ;; copia en data extra la linea de info del nivel
         mov al, char                ;; recupera el caracter leído
         cmp al, 0ah                 ;; es final de línea?
         jz _getLine3                ;; termina el ciclo actual
@@ -252,6 +290,7 @@ loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
         mov bx, di                  ;; guarda el valor di*2
         shl di, 2                   ;; multiplica por ocho
         add bx, di                  ;; obtiene di*10
+        mov di, bx                  ;; determina el registro index
         cx, 10
         xor si, si                  ;; la pos 0 contiene el nombre del nivel
         _getLine4:                  ;; copia el nombre del nivel
@@ -264,9 +303,11 @@ loadLine proc near c uses ebx ecx edx esi edi, nameFile : word
             loop _getLine4          ;; repetir = 10
         _getLine5:                  ;; repite el proceso
             xor di, di
+            mov cx, 80              ;; establece el número de repeticiones para el loop
+            inc j                   ;; aumenta j
             jmp _getLine0
     _getLine6:
-
+    mov gameloaded, 1
     ret
 loadLine endp
 
