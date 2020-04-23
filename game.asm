@@ -484,28 +484,32 @@ printObs proc near c, pos : word, bType : byte
     mov i, 0                ;; i = 0
     mov offPos, 0
     mov ax, pos
-    mov bl, 20
-    xor dx, dx              ;; limpia dx
-    mul bl                  ;; pos * 20
+    shl ax, 2               ;; ax * 4
+    mov bx, ax
+    shl ax, 1               ;; ax * 4 * 2
+    add bx, ax
     mov offPos, ax
     cmp bType, 1
     jz  _printEnemy         ;; es un enemigo
-        mov dx, offset good
+        mov si, offset good
     jmp _printOEnd
     _printEnemy:
-        mov dx, offset bad
+        mov si, offset bad
     _printOEnd:
-        mov ds, dx          ;; indica la pos de mem origen
-        xor si, si
         mov dx, vram
         mov es, dx          ;; indica la pos de mem destino
         _printObsSync:
             mov bx, i
             cmp bx, 20
             jge _printObsSync1
-            mov ax, 180     ;; 180
-            xor dx, dx
-            mul bx          ;; 180 * i
+            shl bx, 2       ;; i * 4
+            mov ax, bx      ;; i * 4
+            shl bx, 2       ;; i * 4 * 4
+            add ax, bx      ;; i * 4 + i * 16
+            shl bx, 1       ;; i * 4 * 4 * 2
+            add ax, bx      ;; i * 4 + i * 16 + i * 32
+            shl bx, 2       ;; i * 4 * 4 * 2 * 4
+            add ax, bx      ;; i * 4 + i * 16 + i * 32 + i * 128
             add ax, offPos  ;; 180 * i + pos * 20
             mov di, ax
             mov cx, 20
