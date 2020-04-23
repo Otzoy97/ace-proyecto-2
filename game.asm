@@ -39,13 +39,14 @@ include string.asm
     lvlsColor       db 6 dup(0)     ;; almacena el literal que especifica el color del carro
     tempNumber      dw ?            ;; var auxiliar para el manejo de numeros
     strBuff         db 10 dup(0)    ;; var auxiliar para el manejo de números
+    charBuffer      db 1            ;; var auxiliar para almacenar un byte
     ;--------------------------------------------------
     ; Datos del nivel actual
     ;--------------------------------------------------
-    penaltyScore    dw ?            ;; indicará cuantos pts perderá por bloque enemigo
-    rewardScore     dw ?            ;; indicará cuantos pts ganará por bloque amigo
-    penaltyScoreDur dw ?            ;; indicará el temporizador para el bloque enemigo
-    rewardScoreDur  dw ?            ;; indicará el temporizador para el bloque enemigo
+    penaltyScore    db ?            ;; indicará cuantos pts perderá por bloque enemigo
+    rewardScore     db ?            ;; indicará cuantos pts ganará por bloque amigo
+    penaltyScoreDur db ?            ;; indicará el temporizador para el bloque enemigo
+    rewardScoreDur  db ?            ;; indicará el temporizador para el bloque enemigo
     actualLevel     db 1            ;; número <-> nivel actual 
     ;--------------------------------------------------
     ; Datos del juego actual
@@ -57,109 +58,39 @@ include string.asm
 .code
 
 ;--------------------------------------------------
-toAsciiT macro fromVar, toVar
+toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
+; Debe existir un valor previamente cargado en ax
 ; Comvierte a ascii la hora dada por la variables con offset toVar
 ;--------------------------------------------------
-    pushad
-    mov ax, fromVar
+    xor cx, cx                      ;; limpia el conteo
     mov bx, 10
     xor dx, dx
     xor si, si
-    _toAscii1:
-        cmp ax, 0
-        jz _toAscii2
+    _toAscii1:                      ;; convierte a decimal
+        cmp ax, 0                   ;; el dividendo es 0?
+        jz _toAscii2                ;; salta a mostrarlo en la variable toVar
         cwd
-        div bx
-        push dx
+        div bx                      ;; dividen dentro de 10
+        push dx                     ;; guarda el residuo
         xor dx, dx
         inc cx
         jmp _toAscii1
     _toAscii2:
+        mov bx, toVar               ;; especifica la variable en dónde se alojará
         cmp cx, 2
-        jz _toAscii3
-        mov bx, fromVar
-        mov [bx], '0'
-        mov si, 1
+        jz _toAscii3                ;; hay dos digitos
+        mov al, '0'
+        mov [bx], al                ;; solo hay un digito, coloca un 0
+        mov si, 1                   ;; se mueve a la pos de unidad
     _toAscii3:
-        pop ax
-        add ax, '0'
-        mov [bx + si], ax
+        pop ax                      ;; recupera el valor
+        add ax, '0'                 ;; le suma '0'
+        mov [bx + si], al
         inc si
-        loop _toAscii3
-    popad
-endm
-
-;--------------------------------------------------
-validateNumber proc near c uses eax ebx, charrOff : word
-; Convierte un número ascci en un número real
-;--------------------------------------------------
-    local temp : word
-    mov temp, 0                     ;; inicializa la variable local
-    mov si, charrOff                ;; establece el offset para es
-    .while (es:[si] >= '0' && es:[si]  <= '9')
-        mov ax, temp                ;; recupera el valor de temp
-        shl ax, 1                   ;; multiplica por dos
-        mov bx, ax                  ;; almacena el valor anterior
-        shl ax, 2                   ;; multiplica por ocho
-        add ax, bx                  ;; suma ax y bx -> temp * 10
-        xor bx, bx                  ;; limpia bx
-        mov bl, es:[si]             ;; mueve el valor en es:[si]  a bl
-        sub bl, '0'                 ;; le resta el valor ascii de '0'
-        add ax, bx                  ;; y se le suma al valor alojado en ax
-        mov temp, ax                ;; guarda el valor en temp
-        inc si                      ;; incrementa el indice de origen
-    .endw
-    mov dx, temp
+        dec cx
+        jnz _toAscii3
     ret
-validateNumber endp
-
-;--------------------------------------------------
-initGame proc far c
-; Carga lor modelos desde los archivos .otz
-; Reserva la memoria para el doble buffer del escenario
-; Carga la información del primer nivel
-; Reinicia todas las variables globales del juego
-;--------------------------------------------------
-    ; Carga el archivo del carro
-    openFile carFN, fileHandler           ;; abre el archivo
-    jc _initGameFailed
-    readFile fileHandler, car, 1800       ;; lee el archivo
-    jc _initGameFailed
-    closeFile fileHandler                 ;; cierra el archivo
-    ; Carga el archivo del bloque amarillo
-    openFile goodFN, fileHandler          ;; abre el archivo
-    jc _initGameFailed
-    readFile fileHandler, good, 900       ;; lee el archivo
-    jc _initGameFailed
-    closeFile fileHandler                 ;; cierra el archivo
-    ; Carga el archivo del bloque verde
-    openFile badFN, fileHandler           ;; abre el archivo
-    jc _initGameFailed
-    readFile fileHandler, bad, 900        ;; lee el archivo
-    jc _initGameFailed
-    closeFile fileHandler                 ;; cierra el archivo
-    ; Carga info reinicia variables
-    mov ax, levelsInfo                    ;; número de nivel
-    mov actualLevel, ax
-    mov ax, levelsInfo[1]                 ;; duración de nivel
-    mov actualLvlDur, ax        
-    mov actualScore, 0
-    mov actalTime, 0
-    mov ah, 48h
-    mov bx, 2025
-    int 21h                               ;; reserva la memoria para la pista
-    jc _initGameFailed
-    mov vram, ax
-    mov ax, 13h
-    int 10h                               ;; inicia el modo video
-    mov ax, 1
-    jmp _initGame1
-    _initGameFailed:
-        mov ax, 0
-    _initGame1:
-        cmp ax, 1
-        ret
-initGame endp
+toAsciiT endp
 
 ;--------------------------------------------------
 setColor proc near c uses eax ebx ecx edx esi edi, idx : word
@@ -210,13 +141,95 @@ setColor proc near c uses eax ebx ecx edx esi edi, idx : word
 setColor endp
 
 ;--------------------------------------------------
+validateNumber proc near c uses eax ebx, charrOff : word
+; Convierte un número ascci en un número real
+;--------------------------------------------------
+    local temp : word
+    mov temp, 0                     ;; inicializa la variable local
+    mov dh, '0'
+    mov dl, '9'
+    mov si, charrOff                ;; establece el offset para es
+    .while (es:[si] >= dh && es:[si]  <= dl)
+        mov ax, temp                ;; recupera el valor de temp
+        shl ax, 1                   ;; multiplica por dos
+        mov bx, ax                  ;; almacena el valor anterior
+        shl ax, 2                   ;; multiplica por ocho
+        add ax, bx                  ;; suma ax y bx -> temp * 10
+        xor bx, bx                  ;; limpia bx
+        mov bl, es:[si]             ;; mueve el valor en es:[si]  a bl
+        sub bl, '0'                 ;; le resta el valor ascii de '0'
+        add ax, bx                  ;; y se le suma al valor alojado en ax
+        mov temp, ax                ;; guarda el valor en temp
+        inc si                      ;; incrementa el indice de origen
+    .endw
+    mov dx, temp
+    ret
+validateNumber endp
+
+;--------------------------------------------------
+initGame proc far c
+; Carga lor modelos desde los archivos .otz
+; Reserva la memoria para el doble buffer del escenario
+; Carga la información del primer nivel
+; Reinicia todas las variables globales del juego
+;--------------------------------------------------
+    ; Carga el archivo del carro
+    openFile carFN, fileHandler           ;; abre el archivo
+    jc _initGameFailed
+    readFile fileHandler, car, 1800       ;; lee el archivo
+    jc _initGameFailed
+    closeFile fileHandler                 ;; cierra el archivo
+    ; Carga el archivo del bloque amarillo
+    openFile goodFN, fileHandler          ;; abre el archivo
+    jc _initGameFailed
+    readFile fileHandler, good, 900       ;; lee el archivo
+    jc _initGameFailed
+    closeFile fileHandler                 ;; cierra el archivo
+    ; Carga el archivo del bloque verde
+    openFile badFN, fileHandler           ;; abre el archivo
+    jc _initGameFailed
+    readFile fileHandler, bad, 900        ;; lee el archivo
+    jc _initGameFailed
+    closeFile fileHandler                 ;; cierra el archivo
+    ; Carga info y reinicia variables
+    mov di, 0
+    mov actualLevel, 1                    ;; comienza en nivel 1
+    mov al, lvlsPenalty[di]
+    mov penaltyScore, al                  ;; punteo menos para nivel 1
+    mov al, lvlsScore[di]
+    mov rewardScore, al                   ;; punteo más para nivel 1
+    mov al, lvlsPenDur[di] 
+    mov penaltyScoreDur, al               ;; temporizador para bloque enemigo
+    mov al, lvlsScoDur[di] 
+    mov rewardScoreDur, al                ;; temporizador para bloque amigo
+    xor ax, ax
+    mov al, lvlsDur[di]
+    mov actualLvlDur, ax                  ;; temporizador para el nivel actual
+    invoke setColor, 0                    ;; coloca el color según la pos 0
+    ; reserva la memoria para la pista
+    mov ah, 48h
+    mov bx, 2025
+    int 21h
+    jc _initGameFailed
+    mov vram, ax
+    mov ax, 13h
+    int 10h                               ;; inicia el modo video
+    mov ax, 1
+    jmp _initGame1
+    _initGameFailed:
+        mov ax, 0
+    _initGame1:
+        cmp ax, 1
+        ret
+initGame endp
+
+;--------------------------------------------------
 loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
 ; nameFile : fileHandler
 ; Solicita la ruta de un archivo que deberá contener
 ; la información del juego
 ;--------------------------------------------------
-    local i : word, charAux : word, char : byte, j : word
-    mov char, 0
+    local i : word, charAux : word , j : word
     mov i, 0
     mov j, 0
     mov charAux, 0
@@ -227,13 +240,14 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
     mov es, ax                      ;; inicializa data extra
     mov cx, 80                      ;; establece el número de repeticiones para el loop
     xor di, di
+    xor ax, ax
     _getLine0:                      ;; llena de 0 la memoria alojada
-        mov es:[di], 0
+        mov es:[di], al
         inc di
         loop _getLine0
     xor di, di
     _getLine1:                      ;; recupera una línea de información
-        readFile nameFile, char, 1  ;; lee un caracter
+        readFile nameFile, charBuffer, 1  ;; lee un caracter
         mov dx, j                   ;; determina si se ha reiniciado el indice (i)
         cmp dx, 6               
         jge _getLine6               ;; lee hasta 6 líneas
@@ -244,7 +258,7 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         jz _getLine6                ;; termina el procedimiento
         jnz _getLine3               ;; i != 0, hay info en charAux
     _getLine11:                     ;; copia en data extra la linea de info del nivel
-        mov al, char                ;; recupera el caracter leído
+        mov al, charBuffer          ;; recupera el caracter leído
         cmp al, 0ah                 ;; es final de línea?
         jz _getLine3                ;; termina el ciclo actual
         cmp al, 59                  ;; es un punto y coma
@@ -276,22 +290,48 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         mov lvlsPenalty[di], dl
         invoke validateNumber, 60   ;; punteo premio
         mov lvlsScore[di], dl
-        .if (es:[70] == 'r' || es:[70] == 'R')
+            mov dl, 'r'
+            mov dh, 'R'
+            cmp es:[70], dl
+            jnz _esVerde
+            cmp es:[70], dh
+            jnz _esVerde
             mov al, 'r'
-        .elseif (es:[70] == 'v' || es:[70] == 'V')
+            mov lvlsColor[di], al       ;; guarda el color del auto
+        _esVerde:
+            mov dl, 'v'
+            mov dh, 'V'
+            cmp es:[70], dl
+            jnz _esAzul
+            cmp es:[70], dh
+            jnz _esAzul
             mov al, 'v'
-        .elseif (es:[70] == 'a' || es:[70] == 'A')
+            mov lvlsColor[di], al       ;; guarda el color del auto
+        _esAzul:
+            mov dl, 'a'
+            mov dh, 'A'
+            cmp es:[70], dl
+            jnz _esBlanco
+            cmp es:[70], dh
+            jnz _esBlanco
             mov al, 'a'
-        .elseif (es:[70] == 'b' || es:[70] == 'B')
+            mov lvlsColor[di], al       ;; guarda el color del auto
+        _esBlanco:
+            mov dl, 'b'
+            mov dh, 'B'
+            cmp es:[70], dl
+            jnz _getLine7
+            cmp es:[70], dh
+            jnz _getLine7
             mov al, 'b'
-        .endif
-        mov lvlsColor[di], al       ;; guarda el color del auto
+            mov lvlsColor[di], al       ;; guarda el color del auto
+        _getLine7:
         shl di, 1                   ;; multiplica por dos
         mov bx, di                  ;; guarda el valor di*2
         shl di, 2                   ;; multiplica por ocho
         add bx, di                  ;; obtiene di*10
         mov di, bx                  ;; determina el registro index
-        cx, 10
+        mov cx, 10
         xor si, si                  ;; la pos 0 contiene el nombre del nivel
         _getLine4:                  ;; copia el nombre del nivel
             mov al, es:[si]         ;; recupera un caracter
@@ -319,12 +359,12 @@ printHeader proc near c uses eax ebx ecx edx esi edi
     mov ah, 02h
     mov bh, 0
     mov dx, 0
-    int 10h
+    int 10h                 ;; coloca el cursor en [0][0]
     mov cx, 40
     xor si, si
     mov bx, offset headerG
     _printHeader1:
-        printChar [bx + si]
+        printChar [bx + si] ;; imprime el encabezado
         inc si
         loop _printHeader1
     ret
@@ -337,21 +377,21 @@ printFooter proc near c uses eax ebx ecx edx es edi
     mov ah, 02h
     mov bh, 0
     mov dx, 1800h
-    int 10h
+    int 10h                 ;; coloca el cursor en [24][0]
     mov cx, 40
     xor si, si
-    mov bx, playState
+    movsx bx, playState
     .if (bx == 0)           ;; jugando
         mov bx, offset bottomP
-    .else if (bx == 1)      ;; pausado
+    .elseif (bx == 1)      ;; pausado
         mov bx, offset bottomU
-    .else if (bx == 2)      ;; game over
+    .elseif (bx == 2)      ;; game over
         mov bx, offset bottomG
     .endif
     _printFooter1:
         printChar [bx + si]
         inc si
-        loop _printFooter1
+        loop _printFooter1  ;; imprime el estado del juego
     ret
 printFooter endp
 
@@ -389,7 +429,7 @@ printFrame proc near c
         mov dx, 17  ;; fila 17
     _printF7:
         cmp dx, 183
-        jge printF12
+        jge _printF12
         mov cx, 67
         _printF8:
             cmp cx, 70
@@ -415,7 +455,7 @@ printFrame endp
 ;--------------------------------------------------
 syncCar proc near c uses edi esi
 ; Printa la capa del carro
-; Utiliza la variabla que almacena el modelo como doble buffer
+; Utiliza la variable que almacena el modelo como doble buffer
 ;--------------------------------------------------
     ;; cuerpo del carro
     ;; comienza en 137 * 320 + pointc
@@ -524,13 +564,9 @@ scrollBackground proc near c
 scrollBackground endp
 
 ;--------------------------------------------------
-timeComposing proc near c use eax ebx ecx edx
+timeComposing proc near c uses eax ebx ecx edx
 ; Compone el tiempo transcurrido en hh:mm:ss
 ;--------------------------------------------------
-    local sec : word, min : word, hrs : word
-    mov sec, 0
-    mov min, 0
-    mov hrs, 0
     mov ax, actualTime
     mov bx, 60
     xor dx, dx
@@ -543,24 +579,24 @@ timeComposing proc near c use eax ebx ecx edx
     .endw
     .if (cx == 3) ;; recupera horas
         pop ax
-        toAsciiT ax, offset horaG
+        invoke toAsciiT, offset horaG
         dec cx
     .endif
     .if (cx == 2) ;; recupera minutos
         pop ax
-        toAsciiT min, offset minuG
+        invoke toAsciiT, offset minuG
         dec cx
     .endif
     .if (cx == 1) ;; recupera segundos
         pop ax
-        toAsciiT hrs, offset segsG
+        invoke toAsciiT, offset segsG
         dec cx
     .endif
     ret
 timeComposing endp
 
 ;--------------------------------------------------
-playGame proc far c use eax ebx ecx edx esi edi 
+playGame proc far c uses eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
     local dRef : word, dKey : word, dCtTime : word
@@ -594,7 +630,7 @@ playGame proc far c use eax ebx ecx edx esi edi
             mov bx, actualTime
             cmp bx, actualLvlDur
             jl _putNewObs               ;; salta a la sig acción
-            mov si, actualLevel
+            movsx si, actualLevel
             cmp si, 6
             jz                          ;; si es igual a 6, se salta a game over
             shl si, 1                   ;; lo multiplica por dos
@@ -628,17 +664,17 @@ playGame proc far c use eax ebx ecx edx esi edi
                 .else                   ;; no está pausado
                     mov playState, 1    ;; pausado
                 .endif
-            .else if (ah == 4dh && bl == 0)        ;; flecha derecha
+            .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
                 mov bx, pointc
                 .if (bx != 249)         ;; limite derecho
                     inc pointc          ;; incrementa la posicion en columna
                 .endif
-            .else if (ah == 4bh && bl == 0)        ;; flecha izquierda
+            .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
                 mov bx, pointc
                 .if (bx != 70)          ;; limite izquierdo
                     dec pointc          ;; decrementa la posicion en columna
                 .endif
-            .else if (ah == 39h)        ;; barra espaciadora
+            .elseif (ah == 39h)        ;; barra espaciadora
                 ;; escribirá la infoe en 
                 ;; el archivo de informes
             .endif
@@ -661,4 +697,5 @@ playGame proc far c use eax ebx ecx edx esi edi
             jmp _playThread
     ret
 playGame endp
+
 end

@@ -205,7 +205,8 @@ mainUser proc near c
         jmp _mainUser1
         _mainUser31:
             openFile strVar, fileHandler        ;; abre el archivo
-            
+            invoke loadLine, fileHandler        ;; carga el archivo
+            closeFile fileHandler               ;; cierra el archivo
             pauseAnyKey
             jmp _mainUser1
     _mainUser4:
