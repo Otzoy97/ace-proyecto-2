@@ -20,15 +20,15 @@ include string.asm
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
     userStr         db "user1     "
-    levelStr        db "n1        "
-    scoreStr        db "          "
+    levelStr        db "n1          "
+    scoreStr        db "        "
     horaG           db "00:"
     minuG           db "00:"
     segsG           db "00 "
     bottomP         db "                  PLAY                  "
     bottomU         db "                  PAUSE                 "
     bottomG         db "                GAME OVER               "
-    randomSeed      dw ?
+    randomSeed      dd ?
     gameloaded      db 0            ;; determina si ya se ha cargado el juego
     lvlStr          db 60 dup(0)    ;; almacenará el nombre de los niveles
     lvlsDur         db 6 dup(0)     ;; almacenará la duración de cada nivel
@@ -37,8 +37,6 @@ include string.asm
     lvlsPenDur      db 6 dup(0)     ;; almacenará el temporizador para los bloque negativos
     lvlsScoDur      db 6 dup(0)     ;; almacenará el temporizador para los bloques positivos
     lvlsColor       db 6 dup(0)     ;; almacena el literal que especifica el color del carro
-    tempNumber      dw ?            ;; var auxiliar para el manejo de numeros
-    strBuff         db 10 dup(0)    ;; var auxiliar para el manejo de números
     charBuffer      db 1            ;; var auxiliar para almacenar un byte
     ;--------------------------------------------------
     ; Datos del nivel actual
@@ -91,6 +89,46 @@ toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
         jnz _toAscii3
     ret
 toAsciiT endp
+
+;--------------------------------------------------
+copyLevelName macro idx
+; Dado el valor de idx, copia el el nombre alojado en 
+; lvlStr a levelStr
+;--------------------------------------------------
+    local _cLN1, _cLN2
+    push cx
+    push di
+    push si
+    push ax
+    push bx
+    mov cx, 10
+    mov bx, idx
+    shl bx, 1
+    mov si, bx
+    shl bx, 2
+    add si, bx
+    xor di, di
+    _cLN1:
+        mov al, lvlStr[si]      ;; recupera un caracter del nombre del nivel
+        cmp al, 0               ;; el valor es nulo
+        jz _cLN2
+        mov levelStr[di], al    ;; lo copia al encabezado
+        inc si
+        inc di
+        loop _cLN1
+    _cLN2:
+    mov ah, ':'
+    mov levelStr[di], ah
+    mov ax, idx
+    xor ah, ah
+    add al, '0'
+    mov levelStr[di + 1], al
+    pop bx
+    pop ax
+    pop si
+    pop di
+    pop cx
+endm
 
 ;--------------------------------------------------
 setColor proc near c uses eax ebx ecx edx esi edi, idx : word
@@ -206,6 +244,7 @@ initGame proc far c
     mov al, lvlsDur[di]
     mov actualLvlDur, ax                  ;; temporizador para el nivel actual
     invoke setColor, 0                    ;; coloca el color según la pos 0
+    copyLevelName 0                       ;; copia el valor para el nivel uno
     ; reserva la memoria para la pista
     mov ah, 48h
     mov bx, 2025
@@ -233,6 +272,13 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
     mov i, 0
     mov j, 0
     mov charAux, 0
+    flushStr lvlsDur, 6, 0 
+    flushStr lvlsPenalty, 6, 0 
+    flushStr lvlsScore, 6, 0 
+    flushStr lvlsPenDur, 6, 0 
+    flushStr lvlsScoDur, 6, 0 
+    flushStr lvlsColor, 6, 0 
+    flushStr lvlStr, 60, 0 
     mov ah, 48h
     mov bx, 5                       ;; 5 * 16 = 80 bytes
     int 21h
@@ -326,28 +372,32 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
             mov al, 'b'
             mov lvlsColor[di], al       ;; guarda el color del auto
         _getLine7:
-        shl di, 1                   ;; multiplica por dos
-        mov bx, di                  ;; guarda el valor di*2
-        shl di, 2                   ;; multiplica por ocho
-        add bx, di                  ;; obtiene di*10
-        mov di, bx                  ;; determina el registro index
-        mov cx, 10
-        xor si, si                  ;; la pos 0 contiene el nombre del nivel
-        _getLine4:                  ;; copia el nombre del nivel
-            mov al, es:[si]         ;; recupera un caracter
-            cmp al, 0               ;; es nulo?
-            jz _getLine5            ;; termina el ciclo
-            mov lvlStr[di], al      ;; almacena un caracter desde di
-            inc di
-            inc si
-            loop _getLine4          ;; repetir = 10
-        _getLine5:                  ;; repite el proceso
-            xor di, di
-            mov cx, 80              ;; establece el número de repeticiones para el loop
-            inc j                   ;; aumenta j
-            jmp _getLine0
+            shl di, 1                   ;; multiplica por dos
+            mov bx, di                  ;; guarda el valor di*2
+            shl di, 2                   ;; multiplica por ocho
+            add bx, di                  ;; obtiene di*10
+            mov di, bx                  ;; determina el registro index
+            mov cx, 10
+            xor si, si                  ;; la pos 0 contiene el nombre del nivel
+            _getLine4:                  ;; copia el nombre del nivel
+                mov al, es:[si]         ;; recupera un caracter
+                cmp al, 0               ;; es nulo?
+                jz _getLine5            ;; termina el ciclo
+                mov lvlStr[di], al      ;; almacena un caracter desde di
+                inc di
+                inc si
+                loop _getLine4          ;; repetir = 10
+            _getLine5:                  ;; repite el proceso
+                xor di, di
+                mov cx, 80              ;; establece el número de repeticiones para el loop
+                inc j                   ;; aumenta j
+                jmp _getLine0
     _getLine6:
-    mov gameloaded, 1
+        mov gameloaded, 1
+        mov ax, charAux
+        mov es, ax
+        mov ah, 49h
+        int 21h
     ret
 loadLine endp
 
@@ -574,24 +624,24 @@ timeComposing proc near c uses eax ebx ecx edx
     mov ax, actualTime
     mov bx, 60
     xor dx, dx
-    .while(ax != 0)
+    .while (ax != 0)
         cwd
         div bx
         push dx
         xor dx, dx
         inc cx
     .endw
-    .if (cx == 3) ;; recupera horas
+    .if (cx == 3)               ;; recupera horas
         pop ax
         invoke toAsciiT, offset horaG
         dec cx
     .endif
-    .if (cx == 2) ;; recupera minutos
+    .if (cx == 2)               ;; recupera minutos
         pop ax
         invoke toAsciiT, offset minuG
         dec cx
     .endif
-    .if (cx == 1) ;; recupera segundos
+    .if (cx == 1)               ;; recupera segundos
         pop ax
         invoke toAsciiT, offset segsG
         dec cx
@@ -600,12 +650,44 @@ timeComposing proc near c uses eax ebx ecx edx
 timeComposing endp
 
 ;--------------------------------------------------
+rand proc near c uses eax ebx ecx edx
+; Genera un número aleatorio utilizando 
+; el algoritmo de generador lineal congruencial (GLC)
+; Xn+1 = (aXn + c) % m
+; randomSeedn+1 = (randomSeed*48271 + 1) % (2^31)
+;--------------------------------------------------
+    xor edx, edx
+    mov eax, randomSeed
+    mov ebx, 48271
+    mul ebx
+    add eax, 1
+    mov ebx, eax                ;; obtiene el modulo de la forma:
+    and ebx, 080000000h          ;; dividendo - (divisor * cociente) = residuo
+    sub eax, ebx
+    mov randomSeed, eax
+    ret
+rand endp
+
+carCollision proc near c uses eax ebx ecx edx
+
+    ret
+carCollision endp
+
+;--------------------------------------------------
 playGame proc far c uses eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
-    local dRef : word, dKey : word, dCtTime : word
+    local dRef : word, dKey : word, dCtTime : word, tempPos : word
     mov dRef, 0
     mov playState, 0                     ;; estado actual  = 0 <-> jugando
+    mov tempPos, 0
+    xor ecx, ecx
+    xor edx, edx
+    mov ah, 0
+    int 1ah
+    shl ecx, 16                          ;; ahora cx, está en la parte alta de ecx
+    add ecx, edx                         ;; suma la parte baja de ecx
+    mov randomSeed, ecx                  ;; para números aleatorios
     mov al, 7                            ;; codigo asignado al color gris
     mov dx, vram
     mov es, dx                           ;; carga la dirección de memoria para el doble buffer
@@ -614,74 +696,138 @@ playGame proc far c uses eax ebx ecx edx esi edi
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
     call printFrame                      ;; pinta el marco del juego
-    _playThread:
+    _playGame1:
         ;--------------------------------------------------
         ; Actualiza el contador de tiempo
         ;--------------------------------------------------
-        mov bx, dCtTime
-        add bx, 18                      ;; se ejecuta cada 18 ticks
-        mov ah, 0
-        int 1ah
-        cmp dx, bx
-        jle _levelRef
-        mov dCtTime, dx                 ;; actualiza el número de ticks
-        inc actualTime                  ;; aumenta el numero de segundos
-        call timeComposing              ;; compone el contador a la forma hh:mm:ss
+            mov bx, dCtTime
+            add bx, 18                      ;; se ejecuta cada 18 ticks
+            mov ah, 0
+            int 1ah                         ;; recupera el número de ticks 
+            cmp dx, bx
+            jle _playGame1                  ;; dx <= bx --> _playGame1
+            mov dCtTime, dx                 ;; actualiza el número de ticks
+            inc actualTime                  ;; aumenta el numero de segundos
+            call timeComposing              ;; compone el contador a la forma hh:mm:ss
+            call printHeader                ;; actualiza el encabezado
         ;--------------------------------------------------
         ; Actualiza el nivel
         ;--------------------------------------------------
-        _levelRef:
-            mov bx, actualTime
-            cmp bx, actualLvlDur
-            jl _putNewObs               ;; salta a la sig acción
-            movsx si, actualLevel
-            cmp si, 6
-            jz                          ;; si es igual a 6, se salta a game over
-            shl si, 1                   ;; lo multiplica por dos
-            inc si                      ;; obtiene el idx para levelsInfo
-            mov ax, levelsInfo[si]      ;; obtiene el valor para la dur del sig nivel
-            add bx, ax
-            mov actualLvlDur, bx        ;; actualiza la duración de nivel
-            inc actualLevel             ;; incrementa el nivel
+            _playGame1:
+                mov bx, actualTime
+                cmp bx, actualLvlDur
+                jl _playGame2               ;; bx < actualLvlDur --> 
+                movsx di, actualLevel
+                cmp di, 6
+                jz                          ;; si es igual a 6, se salta a game over
+                xor ax, ax
+                mov al, lvlsDur[di]
+                cmp al, 0
+                jz                          ;; si es 0, se salta a game over
+                add actualLvlDur, ax        ;; temporizador para el nivel actual
+                mov al, lvlsPenalty[di]
+                mov penaltyScore, al        ;; punteo menos para nivel di
+                mov al, lvlsScore[di]
+                mov rewardScore, al         ;; punteo más para nivel di
+                mov al, lvlsPenDur[di] 
+                mov penaltyScoreDur, al     ;; temporizador para bloque enemigo
+                mov al, lvlsScoDur[di] 
+                mov rewardScoreDur, al      ;; temporizador para bloque amigo
+                invoke setColor, di         ;; coloca el color según la pos 0
+                copyLevelName, di           ;; indica el nombre de nivel
+                call printHeader
+                inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
-        ; Coloca un nuevo obstaculo
+        ; Colocar nuevo obstáculo
         ;--------------------------------------------------
-        _putNewObs:
-
+            _playGame2:
+                mov ax, actualTime
+                xor dx, dx
+                movsx bx, penaltyScoreDur
+                cwd
+                div bx
+                cmp dx, 0
+                jnz _playGame4              ;; si el residuo no es 0, salta
+            _playGame3:
+                call rand                   ;; actualiza randomSeed
+                mov eax, randomSeed
+                xor edx, edx
+                mov ebx, 9
+                cdq
+                div ebx                     ;; divide dentro de nueve
+                cmp dx, tempPos
+                jz _playGame3               ;; si es igual, calculará otro número
+                mov tempPos, dx             ;; aloja el reusltado
+                invoke printObs, dx, 1      ;; pinta un enemigo 
+            _playGame4:
+                mov ax, actualTime
+                xor dx, dx
+                movsx bx, rewardScoreDur
+                cwd
+                div bx
+                cmp dx, 0
+                jnz _playGame6              ;; si el residuo no es 0, salta
+            _playGame5:
+                call rand                   ;; actualiza randomSeed
+                mov eax, randomSeed
+                xor edx, edx
+                mov ebx, 9
+                cdq
+                div ebx                     ;; divide dentro de nueve
+                cmp dx, tempPos
+                jz _playGame5               ;; si es igual, calculará otro número
+                mov tempPos, dx             ;; aloja el reusltado
+                invoke printObs, dx, 0      ;; pinta un amigo
         ;--------------------------------------------------
-        ; Check score
+        ; Actualiza la pista
         ;--------------------------------------------------
+            _playGame6:
+                call scrollBackground
         ;--------------------------------------------------
         ; Lee el teclado
         ;--------------------------------------------------
-        _checkKeyBoard:
-            mov ah, 01h
-            int 16h
-            jz _screenRefresh           ;; salta a la sig acción
-        _readKeyBoard:
-            mov ah, 0h
-            int 16h
-            mov bl, playState           ;; carga el estado del juego
-            .if (ah == 1h)              ;; tecla ESC
-                .if (bl == 1)           ;; esta pausado
-                    mov playState, 0    ;; jugando
-                .else                   ;; no está pausado
-                    mov playState, 1    ;; pausado
+            _playGame4:
+                mov ah, 01h
+                int 16h
+                jz _screenRefresh           ;; salta a la sig acción
+            _playGame5:
+                mov ah, 0h
+                int 16h
+                mov bl, playState           ;; carga el estado del juego
+                .if (ah == 1h)              ;; tecla ESC
+                    .if (bl == 1)           ;; esta pausado
+                        mov playState, 0    ;; jugando
+                    .else                   ;; no está pausado
+                        mov playState, 1    ;; pausado
+                    .endif
+                .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
+                    mov bx, pointc
+                    .if (bx != 249)         ;; limite derecho
+                        inc pointc          ;; incrementa la posicion en columna
+                    .endif
+                .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
+                    mov bx, pointc
+                    .if (bx != 70)          ;; limite izquierdo
+                        dec pointc          ;; decrementa la posicion en columna
+                    .endif
+                .elseif (ah == 39h)        ;; barra espaciadora
+                    jmp                    ;; game over
                 .endif
-            .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
-                mov bx, pointc
-                .if (bx != 249)         ;; limite derecho
-                    inc pointc          ;; incrementa la posicion en columna
-                .endif
-            .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
-                mov bx, pointc
-                .if (bx != 70)          ;; limite izquierdo
-                    dec pointc          ;; decrementa la posicion en columna
-                .endif
-            .elseif (ah == 39h)        ;; barra espaciadora
-                ;; escribirá la infoe en 
-                ;; el archivo de informes
-            .endif
+        ;--------------------------------------------------
+        ; Determina colisión
+        ;--------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
