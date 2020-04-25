@@ -205,11 +205,8 @@ validateNumber proc near c uses eax ebx, charrOff : word
 validateNumber endp
 
 ;--------------------------------------------------
-initGame proc far c
 ; Carga lor modelos desde los archivos .otz
-; Reserva la memoria para el doble buffer del escenario
-; Carga la información del primer nivel
-; Reinicia todas las variables globales del juego
+loadGameFiles proc far c
 ;--------------------------------------------------
     ; Carga el archivo del carro
     openFile carFN, fileHandler           ;; abre el archivo
@@ -229,6 +226,15 @@ initGame proc far c
     readFile fileHandler, bad, 900        ;; lee el archivo
     jc _initGameFailed
     closeFile fileHandler                 ;; cierra el archivo
+    ret
+loadGameFiles endp
+
+;--------------------------------------------------
+initGame proc far c
+; Reserva la memoria para el doble buffer del escenario
+; Carga la información del primer nivel
+; Reinicia todas las variables globales del juego
+;--------------------------------------------------
     ; Carga info y reinicia variables
     mov actualScore, 3
     mov di, 0
@@ -724,8 +730,9 @@ carCollision proc near c uses eax ebx edx edi
     push ds
     push es
     mov i, 0
-    mov rPointC, pointc
-    mov col, pointc                 ;; pos en columna
+    mov ax, pointc
+    mov rPointC, ax
+    mov col, ax                     ;; pos en columna
     sub rPointC, 70                 ;; recupera la posición relativa a la pista
     add rPointC, 7                  ;; solo comprueba choque en el parachoque :v
     mov dx, vram
@@ -736,7 +743,7 @@ carCollision proc near c uses eax ebx edx edi
     mov di, ax
     _collVertical:
         cmp i, 31                   ;; verificará en 31 posiciones
-        jge _collVertical4
+        jge _collVertical4          ;; terminará el proceso
         mov dl, 2                   ;; color verde -> enemigo
         cmp es:[di], dl
         jnz _collVertical2          ;; es un enemigo
@@ -745,7 +752,7 @@ carCollision proc near c uses eax ebx edx edi
         xor dx, dx
         cwd
         div bx                      ;; divide dentro de 20
-        invoke posErase, dx         ;; elimina el enemigo encontrado
+        invoke eraseObs, dx         ;; elimina el enemigo encontrado
         mov ax, actualScore
         movzx bx, penaltyScore
         .if (ax < bx)               ;; evita overflow
@@ -753,6 +760,7 @@ carCollision proc near c uses eax ebx edx edi
         .else
             sub actualScore, bx     ;; actualiza el punteo
         .endif       
+        call printHeader            ;; actualiza el encabezado
     _collVertical2:
         mov dh, 42                  ;; color amarillo -> amigo
         cmp es:[di], dh
@@ -762,18 +770,44 @@ carCollision proc near c uses eax ebx edx edi
         xor dx, dx
         cwd
         div bx                      ;; divide dentor de 20
-        invoke posErase, dx         ;; elimina al amigo encontrado
+        invoke eraseObs, dx         ;; elimina al amigo encontrado
         movzx bx, penaltyScore
         add actualScore, bx         ;; actualiza el punteo
+        call printHeader            ;; actualiza el encabezado
     _collVertical3:
         inc di
+        inc col
         inc i
-        jnz _collVertical
+        jmp _collVertical           ;; continúa con el ciclo
     _collVertical4:
     pop es
     pop ds
     ret
 carCollision endp
+
+;--------------------------------------------------
+endGame proc near c 
+; Libera la memoria asignada en vram
+; termina con el modo video
+;--------------------------------------------------
+    mod dx, vram
+    mov es, dx
+    mov ah, 49h
+    int 21h
+    mov ax, 0003h
+    int 10h 
+    ret
+endGame endp
+
+;--------------------------------------------------
+saveScores proc near c
+; Recupera la información, tal como el nombre del usuario
+; puntuación total, segundos jugados y el nivel alcanzado
+; Escriba esta información al final del archivo de puntuación
+; USER;SCORE;SECS;LVL
+;--------------------------------------------------
+    ret
+saveScores endp
 
 ;--------------------------------------------------
 playGame proc far c uses eax ebx ecx edx esi edi 
@@ -798,13 +832,14 @@ playGame proc far c uses eax ebx ecx edx esi edi
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
     call printFrame                      ;; pinta el marco del juego
-    _playGame0:
+    call printFooter                     ;; pinta el pie de página
+    _playGame0:                          ;; este ciclo maneja todo el juego
         ;--------------------------------------------------
         ; Actualiza el contador de tiempo
         ;--------------------------------------------------
-            mov dx, playState
+            movzx dx, playState
             cmp dx, 1                       ;; está pausado
-            jz _playGame7                  ;; se salta a leer el teclado
+            jz _playGame7                   ;; se salta a leer el teclado
             mov bx, dCtTime
             add bx, 18                      ;; se ejecuta cada 18 ticks
             mov ah, 0
@@ -824,11 +859,11 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 jl _playGame2               ;; bx < actualLvlDur --> 
                 movzx di, actualLevel
                 cmp di, 6
-                jz                          ;; si es igual a 6, se salta a game over
+                jz _playGame12              ;; si es igual a 6, se salta a game over
                 xor ax, ax
                 mov al, lvlsDur[di]
                 cmp al, 0
-                jz                          ;; si es 0, se salta a game over
+                jz _playGame12              ;; si es 0, se salta a game over
                 add actualLvlDur, ax        ;; temporizador para el nivel actual
                 mov al, lvlsPenalty[di]
                 mov penaltyScore, al        ;; punteo menos para nivel di
@@ -839,7 +874,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 mov al, lvlsScoDur[di] 
                 mov rewardScoreDur, al      ;; temporizador para bloque amigo
                 invoke setColor, di         ;; coloca el color según la pos 0
-                copyLevelName, di           ;; indica el nombre de nivel
+                copyLevelName di           ;; indica el nombre de nivel
                 call printHeader
                 inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
@@ -901,7 +936,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
             _playGame7:
                 mov ah, 01h
                 int 16h
-                jz _playGame9               ;; salta a la sig acción
+                jz _playGame9               ;; no hay nada para leer
             _playGame8:
                 mov ah, 0h
                 int 16h
@@ -913,12 +948,14 @@ playGame proc far c uses eax ebx ecx edx esi edi
                         mov dx, tempDX
                         int 1ah             ;; reestablece el contador
                         mov playState, 0    ;; jugando
+                        call printFooter
                     .else                   ;; está jugando
                         mov ah, 00h
                         int 1ah
                         mov tempCX, cx      ;; guarda el temporizador
                         mov tempDX, dx      ;; guarda el temporizador
                         mov playState, 1    ;; pausado
+                        call printFooter
                     .endif
                 .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
                     mov bx, pointc
@@ -931,12 +968,15 @@ playGame proc far c uses eax ebx ecx edx esi edi
                         dec pointc          ;; decrementa la posicion en columna
                     .endif
                 .elseif (ah == 39h)        ;; barra espaciadora
-                    jmp                    ;; game over
+                    jmp _playGame12        ;; game over
                 .endif
         ;--------------------------------------------------
         ; Determina colisión
         ;--------------------------------------------------
             _playGame9:
+                movzx dx, playState
+                cmp dx, 1                       ;; está pausado
+                jz _playGame0                   ;; regresa al loop principal
                 call carCollision
         ;--------------------------------------------------
         ; Refresca la pantalla
@@ -954,8 +994,13 @@ playGame proc far c uses eax ebx ecx edx esi edi
             _playGame11 :
                 call syncCar                     ;; copia el carro a la mem de video
                 jmp _playGame0
-    _playGame12:
-
+    _playGame12:                         ;; game over
+        mov al, 2
+        mov playState, 2
+        call printFooter
+        mov ah, 10h
+        int 16h                          ;; espera por una tecla
+        call endGame                     ;; termina con el modo video
     ret
 playGame endp
 
