@@ -230,6 +230,7 @@ initGame proc far c
     jc _initGameFailed
     closeFile fileHandler                 ;; cierra el archivo
     ; Carga info y reinicia variables
+    mov actualScore, 3
     mov di, 0
     mov actualLevel, 1                    ;; comienza en nivel 1
     mov al, lvlsPenalty[di]
@@ -430,7 +431,7 @@ printFooter proc near c uses eax ebx ecx edx es edi
     int 10h                 ;; coloca el cursor en [24][0]
     mov cx, 40
     xor si, si
-    movsx bx, playState
+    movzx bx, playState
     .if (bx == 0)           ;; jugando
         mov bx, offset bottomP
     .elseif (bx == 1)      ;; pausado
@@ -668,8 +669,109 @@ rand proc near c uses eax ebx ecx edx
     ret
 rand endp
 
-carCollision proc near c uses eax ebx ecx edx
+;--------------------------------------------------
+eraseObs proc near c uses eax ebx ecx edx esi edi, posErase : word
+; Elimina un obstaculo que encaja entre las columnas :
+; [posErase * 20, posErase * 20 + 20)
+;--------------------------------------------------
+    local i : word, posInicial : word, pos20: word
+    push ds
+    push es
+    mov i, 0                        ;; i = 0
+    mov ax, posErase                ;; recupera la pos en columna
+    shl ax, 2                       ;; posErase * 4
+    mov bx, ax                      ;; posErase * 4
+    shl ax, 2                       ;; posErase * 4 * 4
+    add bx, ax                      ;; posErase * 4 + posErase * 4 * 4
+    mov ax, 21240                   ;; 118*180 <> posición en fila
+    add ax, bx                      ;; posición absoluta en vram
+    mov posInicial, ax
+    mov dx, vram
+    mov es, dx                      ;; establece data extra
+    _eraseObs1:
+        cmp i, 20
+        jge _eraseObs2              ;; termina el ciclo
+        mov ax, i
+        shl ax, 2                   ;; i * 4
+        mov bx, ax
+        shl ax, 2                   ;; i * 4 * 4
+        add bx, ax
+        shl ax, 1                   ;; i * 4 * 4 * 2
+        add bx, ax
+        shl ax, 2                   ;; i * 4 * 4 * 2 * 4
+        add bx, ax                  ;; 128x+32x+16x+4x = 180*i
+        add bx, posInicial          ;; 180 * i [row] + posInicial [col]
+        mov di, bx
+        mov cx, 20
+        mov al, 7                   ;; color gris
+        cld 
+        rep stosb
+        inc i
+        jmp _eraseObs1
+    _eraseObs2:
+    pop es
+    pop ds
+    ret
+eraseObs endp
 
+;--------------------------------------------------
+carCollision proc near c uses eax ebx edx edi
+; Verifica si existe un color que no sea el de la pista
+; determina si el color es verde (2) o amarillo (42)
+; Luego actualiza el punteo
+;--------------------------------------------------
+    local rPointC : word, col : word, i : word
+    push ds
+    push es
+    mov i, 0
+    mov rPointC, pointc
+    mov col, pointc                 ;; pos en columna
+    sub rPointC, 70                 ;; recupera la posición relativa a la pista
+    add rPointC, 7                  ;; solo comprueba choque en el parachoque :v
+    mov dx, vram
+    mov es, dx                      ;; carga dato extra
+    mov ax, 24660                   ;; 137 x 180
+    add ax, rPointC                 ;; recupera la posición absoluta en la pista
+    mov rPointC, ax
+    mov di, ax
+    _collVertical:
+        cmp i, 31                   ;; verificará en 31 posiciones
+        jge _collVertical4
+        mov dl, 2                   ;; color verde -> enemigo
+        cmp es:[di], dl
+        jnz _collVertical2          ;; es un enemigo
+        mov ax, col                 ;; recupera la pos en col
+        mov bx, 20
+        xor dx, dx
+        cwd
+        div bx                      ;; divide dentro de 20
+        invoke posErase, dx         ;; elimina el enemigo encontrado
+        mov ax, actualScore
+        movzx bx, penaltyScore
+        .if (ax < bx)               ;; evita overflow
+            mov actualScore, 0      ;; actualiza el punteo
+        .else
+            sub actualScore, bx     ;; actualiza el punteo
+        .endif       
+    _collVertical2:
+        mov dh, 42                  ;; color amarillo -> amigo
+        cmp es:[di], dh
+        jnz _collVertical3          ;; es un amigo
+        mov ax, col
+        mov bx, 20
+        xor dx, dx
+        cwd
+        div bx                      ;; divide dentor de 20
+        invoke posErase, dx         ;; elimina al amigo encontrado
+        movzx bx, penaltyScore
+        add actualScore, bx         ;; actualiza el punteo
+    _collVertical3:
+        inc di
+        inc i
+        jnz _collVertical
+    _collVertical4:
+    pop es
+    pop ds
     ret
 carCollision endp
 
@@ -677,7 +779,7 @@ carCollision endp
 playGame proc far c uses eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
-    local dRef : word, dKey : word, dCtTime : word, tempPos : word
+    local dRef : word, dKey : word, dCtTime : word, tempPos : word, tempDX : word, tempCX : word
     mov dRef, 0
     mov playState, 0                     ;; estado actual  = 0 <-> jugando
     mov tempPos, 0
@@ -696,10 +798,13 @@ playGame proc far c uses eax ebx ecx edx esi edi
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
     call printFrame                      ;; pinta el marco del juego
-    _playGame1:
+    _playGame0:
         ;--------------------------------------------------
         ; Actualiza el contador de tiempo
         ;--------------------------------------------------
+            mov dx, playState
+            cmp dx, 1                       ;; está pausado
+            jz _playGame7                  ;; se salta a leer el teclado
             mov bx, dCtTime
             add bx, 18                      ;; se ejecuta cada 18 ticks
             mov ah, 0
@@ -717,7 +822,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 mov bx, actualTime
                 cmp bx, actualLvlDur
                 jl _playGame2               ;; bx < actualLvlDur --> 
-                movsx di, actualLevel
+                movzx di, actualLevel
                 cmp di, 6
                 jz                          ;; si es igual a 6, se salta a game over
                 xor ax, ax
@@ -743,7 +848,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
             _playGame2:
                 mov ax, actualTime
                 xor dx, dx
-                movsx bx, penaltyScoreDur
+                movzx bx, penaltyScoreDur
                 cwd
                 div bx
                 cmp dx, 0
@@ -762,7 +867,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
             _playGame4:
                 mov ax, actualTime
                 xor dx, dx
-                movsx bx, rewardScoreDur
+                movzx bx, rewardScoreDur
                 cwd
                 div bx
                 cmp dx, 0
@@ -782,27 +887,42 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Actualiza la pista
         ;--------------------------------------------------
             _playGame6:
+                mov bx, dREf
+                add bx, 1
+                mov ah, 0
+                int 1ah
+                cmp dx, bx
+                jle _playGame7
+                mov dRef, dx
                 call scrollBackground
         ;--------------------------------------------------
         ; Lee el teclado
         ;--------------------------------------------------
-            _playGame4:
+            _playGame7:
                 mov ah, 01h
                 int 16h
-                jz _screenRefresh           ;; salta a la sig acción
-            _playGame5:
+                jz _playGame9               ;; salta a la sig acción
+            _playGame8:
                 mov ah, 0h
                 int 16h
                 mov bl, playState           ;; carga el estado del juego
                 .if (ah == 1h)              ;; tecla ESC
                     .if (bl == 1)           ;; esta pausado
+                        mov ah, 01h
+                        mov cx, tempCX
+                        mov dx, tempDX
+                        int 1ah             ;; reestablece el contador
                         mov playState, 0    ;; jugando
-                    .else                   ;; no está pausado
+                    .else                   ;; está jugando
+                        mov ah, 00h
+                        int 1ah
+                        mov tempCX, cx      ;; guarda el temporizador
+                        mov tempDX, dx      ;; guarda el temporizador
                         mov playState, 1    ;; pausado
                     .endif
                 .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
                     mov bx, pointc
-                    .if (bx != 249)         ;; limite derecho
+                    .if (bx != 205)         ;; limite derecho
                         inc pointc          ;; incrementa la posicion en columna
                     .endif
                 .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
@@ -816,35 +936,26 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ;--------------------------------------------------
         ; Determina colisión
         ;--------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
+            _playGame9:
+                call carCollision
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
-        _screenRefresh:
-            mov bx, dRef
-            add bx, 1                        ;; se ejecuta cada tick
-            mov ah, 0
-            int 1ah                          ;; recupera el contador del sistema
-            cmp dx, bx                       ;; dx > bx
-            jle _screenRefresh1              ;; no ha pasado los ticks suficientes
-            mov dRef, dx                     ;; actualiza el dRef
-            call scrollBackground            ;; actualiza el tablero
-            call printHeader                 ;; imprime el texto
-        _screenRefresh1:
-            call syncBackground              ;; copia el tablero a la mem de video
-            call syncCar                     ;; copia el carro a la mem de video
-            jmp _playThread
+            _playGame10:
+                mov bx, dRef
+                add bx, 1                        ;; se ejecuta cada tick
+                mov ah, 0
+                int 1ah                          ;; recupera el contador del sistema
+                cmp dx, bx                       ;; dx > bx
+                jle _playGame11                  ;; no ha pasado los ticks suficientes
+                mov dRef, dx                     ;; actualiza el dRef
+                call scrollBackground            ;; actualiza el tablero
+                call syncBackground              ;; copia el tablero a la mem de video
+            _playGame11 :
+                call syncCar                     ;; copia el carro a la mem de video
+                jmp _playGame0
+    _playGame12:
+
     ret
 playGame endp
 
