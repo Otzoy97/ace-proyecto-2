@@ -588,6 +588,7 @@ toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
     xor cx, cx                      ;; limpia el conteo
     mov bx, 10
     xor dx, dx
+    xor si, si
     .while (ax != 0)
         cwd
         div bx
@@ -751,6 +752,9 @@ carCollision proc near c uses eax ebx edx edi
         .else
             sub actualScore, bx     ;; actualiza el punteo
         .endif       
+        flushStr scoreStr, 8, 32
+        mov ax, actualScore
+        invoke toAsciiT, offset scoreStr
         call printHeader            ;; actualiza el encabezado
     _collVertical2:
         mov dh, 42                  ;; color amarillo -> amigo
@@ -764,6 +768,9 @@ carCollision proc near c uses eax ebx edx edi
         invoke eraseObs, dx         ;; elimina al amigo encontrado
         movzx bx, penaltyScore
         add actualScore, bx         ;; actualiza el punteo
+        flushStr scoreStr, 8, 32
+        mov ax, actualScore
+        invoke toAsciiT, offset scoreStr
         call printHeader            ;; actualiza el encabezado
     _collVertical3:
         inc di
@@ -826,6 +833,8 @@ playGame proc far c uses eax ebx ecx edx esi edi
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
     invoke setColor, 0
+    mov ax, actualScore
+    invoke toAsciiT, offset scoreStr
     call printFrame                      ;; pinta el marco del juego
     call printFooter                     ;; pinta el pie de página
     call printHeader
@@ -918,14 +927,14 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Actualiza la pista
         ;--------------------------------------------------
             _playGame6:
-                ; mov bx, dREf
-                ; add bx, 1
-                ; mov ah, 0
-                ; int 1ah
-                ; cmp dx, bx
-                ; jle _playGame7
-                ; mov dRef, dx
-                ; call scrollBackground
+                mov bx, dREf
+                add bx, 1
+                mov ah, 0
+                int 1ah
+                cmp dx, bx
+                jle _playGame7
+                mov dRef, dx
+                call scrollBackground
         ;--------------------------------------------------
         ; Lee el teclado
         ;--------------------------------------------------
@@ -983,7 +992,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
-            ; _playGame10:
+            _playGame10:
                 call syncBackground              ;; copia el tablero a la mem de video
                 call syncCar                     ;; copia el carro a la mem de video
                 jmp _playGame0
