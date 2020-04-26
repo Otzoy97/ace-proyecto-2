@@ -12,15 +12,15 @@ include string.asm
     pointc          dw 137               ;; posición inicial 137 (columna)
     vram            dw ?                 ;; almacena el offset del doble buffer para el fondo del juego
     car             db 1800 dup(0)       ;; almacena el modelo del carro
-    good            db 900 dup(0)        ;; almacena el modelo del bloque bueno
-    bad             db 900 dup(0)        ;; almacena el modelo del bloque malo
+    good            db 400 dup(0)        ;; almacena el modelo del bloque bueno
+    bad             db 400 dup(0)        ;; almacena el modelo del bloque malo
     carFN           db "car.otz", 00     ;; archivo que DEBE de existir
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
-    userStr         db "user1     "
-    levelStr        db "n1          "
+    userStr         db "          "
+    levelStr        db "            "
     scoreStr        db "        "
     horaG           db "00:"
     minuG           db "00:"
@@ -54,41 +54,6 @@ include string.asm
     actualLvlDur    dw ?            ;; número <-> duración nivel actual
     playState       db ?            ;; indica el estado actual del juego
 .code
-
-;--------------------------------------------------
-toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
-; Debe existir un valor previamente cargado en ax
-; Comvierte a ascii la hora dada por la variables con offset toVar
-;--------------------------------------------------
-    xor cx, cx                      ;; limpia el conteo
-    mov bx, 10
-    xor dx, dx
-    xor si, si
-    _toAscii1:                      ;; convierte a decimal
-        cmp ax, 0                   ;; el dividendo es 0?
-        jz _toAscii2                ;; salta a mostrarlo en la variable toVar
-        cwd
-        div bx                      ;; dividen dentro de 10
-        push dx                     ;; guarda el residuo
-        xor dx, dx
-        inc cx
-        jmp _toAscii1
-    _toAscii2:
-        mov bx, toVar               ;; especifica la variable en dónde se alojará
-        cmp cx, 2
-        jz _toAscii3                ;; hay dos digitos
-        mov al, '0'
-        mov [bx], al                ;; solo hay un digito, coloca un 0
-        mov si, 1                   ;; se mueve a la pos de unidad
-    _toAscii3:
-        pop ax                      ;; recupera el valor
-        add ax, '0'                 ;; le suma '0'
-        mov [bx + si], al
-        inc si
-        dec cx
-        jnz _toAscii3
-    ret
-toAsciiT endp
 
 ;--------------------------------------------------
 copyLevelName macro idx
@@ -217,15 +182,22 @@ loadGameFiles proc far c
     ; Carga el archivo del bloque amarillo
     openFile goodFN, fileHandler          ;; abre el archivo
     jc _initGameFailed
-    readFile fileHandler, good, 900       ;; lee el archivo
+    readFile fileHandler, good, 400       ;; lee el archivo
     jc _initGameFailed
     closeFile fileHandler                 ;; cierra el archivo
     ; Carga el archivo del bloque verde
     openFile badFN, fileHandler           ;; abre el archivo
     jc _initGameFailed
-    readFile fileHandler, bad, 900        ;; lee el archivo
+    readFile fileHandler, bad, 400        ;; lee el archivo
     jc _initGameFailed
     closeFile fileHandler                 ;; cierra el archivo
+    mov ax, 1
+    jmp _initGame1
+    _initGameFailed:
+        mov ax, 0
+    _initGame1:
+        cmp ax, 1
+        ret
     ret
 loadGameFiles endp
 
@@ -256,16 +228,16 @@ initGame proc far c
     mov ah, 48h
     mov bx, 2025
     int 21h
-    jc _initGameFailed
+    ;jc _initGameFailed
     mov vram, ax
     mov ax, 13h
     int 10h                               ;; inicia el modo video
     mov ax, 1
-    jmp _initGame1
-    _initGameFailed:
-        mov ax, 0
-    _initGame1:
-        cmp ax, 1
+    ;jmp _initGame1
+    ;_initGameFailed:
+    ;    mov ax, 0
+    ;_initGame1:
+    ;    cmp ax, 1
         ret
 initGame endp
 
@@ -433,7 +405,8 @@ printFooter proc near c uses eax ebx ecx edx es edi
 ;--------------------------------------------------
     mov ah, 02h
     mov bh, 0
-    mov dx, 1800h
+    mov dh, 12
+    mov dl, 0
     int 10h                 ;; coloca el cursor en [24][0]
     mov cx, 40
     xor si, si
@@ -510,7 +483,7 @@ printFrame proc near c
 printFrame endp
 
 ;--------------------------------------------------
-syncCar proc near c uses edi esi
+syncCar proc near c uses ebx eax
 ; Printa la capa del carro
 ; Utiliza la variable que almacena el modelo como doble buffer
 ;--------------------------------------------------
@@ -523,7 +496,8 @@ syncCar proc near c uses edi esi
     ;; la figura tiene una base de 45
     ;; se pintará 40 posiciones
     ;; la figura se leerá desde la posición 0
-    invoke syncBuffer, offset car, bx, 45, 40, 0
+    mov ax, @data
+    invoke syncBuffer, ax, bx, 45, 40, offset car
     ret
 syncCar endp
 
@@ -582,7 +556,7 @@ printObs proc near c, pos : word, bType : byte
 printObs endp
 
 ;--------------------------------------------------
-syncBackground proc near c uses edi esi
+syncBackground proc near c
 ; Pinta el interior del marco del juego
 ;--------------------------------------------------
     ;; cuadrado completo
@@ -601,11 +575,9 @@ scrollBackground proc near c
 ; Actualiza la pantalla principal.
 ; Reemplaza los pixeles inferiores con los superiores
 ;--------------------------------------------------
-    local i : word
     pushad
     push es
     push ds
-    mov i, 0
     mov dx, vram
     mov ds, dx          ;; determina el origen
     mov es, dx          ;; determina el destino
@@ -618,11 +590,42 @@ scrollBackground proc near c
     mov cx, 180
     std                 ;; el indice di se debe decrementar
     rep stosb           ;; la primera línea se pinta de color gris
-    pop es
+    pop ds
     pop es
     popad
     ret
 scrollBackground endp
+
+;--------------------------------------------------
+toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
+; Debe existir un valor previamente cargado en ax
+; Comvierte a ascii la hora dada por la variables con offset toVar
+;--------------------------------------------------
+    xor cx, cx                      ;; limpia el conteo
+    mov bx, 10
+    xor dx, dx
+    .while (ax != 0)
+        cwd
+        div bx
+        push dx
+        xor dx, dx
+        inc cx
+    .endw
+    mov bx, toVar
+    .if (cx == 2)
+        mov si, 0
+    .elseif (cx == 1)
+        mov si, 1
+    .endif
+    .while (cx != 0)
+        pop ax
+        add ax, '0'
+        mov [bx + si], al
+        inc si
+        dec cx
+    .endw
+    ret
+toAsciiT endp
 
 ;--------------------------------------------------
 timeComposing proc near c uses eax ebx ecx edx
@@ -631,6 +634,7 @@ timeComposing proc near c uses eax ebx ecx edx
     mov ax, actualTime
     mov bx, 60
     xor dx, dx
+    xor cx, cx
     .while (ax != 0)
         cwd
         div bx
@@ -790,7 +794,7 @@ endGame proc near c
 ; Libera la memoria asignada en vram
 ; termina con el modo video
 ;--------------------------------------------------
-    mod dx, vram
+    mov dx, vram
     mov es, dx
     mov ah, 49h
     int 21h
@@ -813,10 +817,13 @@ saveScores endp
 playGame proc far c uses eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
-    local dRef : word, dKey : word, dCtTime : word, tempPos : word, tempDX : word, tempCX : word
+    local dRef : word, dCtTime : word, tempPos : word, tempDX : word, tempCX : word
     mov dRef, 0
     mov playState, 0                     ;; estado actual  = 0 <-> jugando
+    mov dCtTime, 0
     mov tempPos, 0
+    mov tempDX,0
+    mov tempCX,0
     xor ecx, ecx
     xor edx, edx
     mov ah, 0
@@ -833,6 +840,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
     rep stosb                            ;; pinta de gris el escenario
     call printFrame                      ;; pinta el marco del juego
     call printFooter                     ;; pinta el pie de página
+    call printHeader
     _playGame0:                          ;; este ciclo maneja todo el juego
         ;--------------------------------------------------
         ; Actualiza el contador de tiempo
@@ -842,157 +850,154 @@ playGame proc far c uses eax ebx ecx edx esi edi
             jz _playGame7                   ;; se salta a leer el teclado
             mov bx, dCtTime
             add bx, 18                      ;; se ejecuta cada 18 ticks
-            mov ah, 0
+            mov ah, 0h
             int 1ah                         ;; recupera el número de ticks 
-            cmp dx, bx
-            jle _playGame1                  ;; dx <= bx --> _playGame1
-            mov dCtTime, dx                 ;; actualiza el número de ticks
-            inc actualTime                  ;; aumenta el numero de segundos
-            call timeComposing              ;; compone el contador a la forma hh:mm:ss
-            call printHeader                ;; actualiza el encabezado
+            .if (dx > bx)
+                mov dCtTime, dx                 ;; actualiza el número de ticks
+                inc actualTime                  ;; aumenta el numero de segundos
+                call timeComposing              ;; compone el contador a la forma hh:mm:ss
+                call printHeader                ;; actualiza el encabezado
+            .endif
         ;--------------------------------------------------
         ; Actualiza el nivel
         ;--------------------------------------------------
             _playGame1:
-                mov bx, actualTime
-                cmp bx, actualLvlDur
-                jl _playGame2               ;; bx < actualLvlDur --> 
-                movzx di, actualLevel
-                cmp di, 6
-                jz _playGame12              ;; si es igual a 6, se salta a game over
-                xor ax, ax
-                mov al, lvlsDur[di]
-                cmp al, 0
-                jz _playGame12              ;; si es 0, se salta a game over
-                add actualLvlDur, ax        ;; temporizador para el nivel actual
-                mov al, lvlsPenalty[di]
-                mov penaltyScore, al        ;; punteo menos para nivel di
-                mov al, lvlsScore[di]
-                mov rewardScore, al         ;; punteo más para nivel di
-                mov al, lvlsPenDur[di] 
-                mov penaltyScoreDur, al     ;; temporizador para bloque enemigo
-                mov al, lvlsScoDur[di] 
-                mov rewardScoreDur, al      ;; temporizador para bloque amigo
-                invoke setColor, di         ;; coloca el color según la pos 0
-                copyLevelName di           ;; indica el nombre de nivel
-                call printHeader
-                inc actualLevel             ;; incrementa el nivel
+                ; mov bx, actualTime
+                ; cmp bx, actualLvlDur
+                ; jl _playGame2               ;; bx < actualLvlDur --> Coloca nuevo obstaculo
+                ; movzx di, actualLevel
+                ; cmp di, 6
+                ; jz _playGame12              ;; si es igual a 6, se salta a game over
+                ; xor ax, ax
+                ; mov al, lvlsDur[di]
+                ; cmp al, 0
+                ; jz _playGame12              ;; si es 0, se salta a game over
+                ; add actualLvlDur, ax        ;; temporizador para el nivel actual
+                ; mov al, lvlsPenalty[di]
+                ; mov penaltyScore, al        ;; punteo menos para nivel di
+                ; mov al, lvlsScore[di]
+                ; mov rewardScore, al         ;; punteo más para nivel di
+                ; mov al, lvlsPenDur[di] 
+                ; mov penaltyScoreDur, al     ;; temporizador para bloque enemigo
+                ; mov al, lvlsScoDur[di] 
+                ; mov rewardScoreDur, al      ;; temporizador para bloque amigo
+                ; invoke setColor, di         ;; coloca el color según la pos 0
+                ; copyLevelName di           ;; indica el nombre de nivel
+                ; call printHeader
+                ; inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
         ; Colocar nuevo obstáculo
         ;--------------------------------------------------
-            _playGame2:
-                mov ax, actualTime
-                xor dx, dx
-                movzx bx, penaltyScoreDur
-                cwd
-                div bx
-                cmp dx, 0
-                jnz _playGame4              ;; si el residuo no es 0, salta
-            _playGame3:
-                call rand                   ;; actualiza randomSeed
-                mov eax, randomSeed
-                xor edx, edx
-                mov ebx, 9
-                cdq
-                div ebx                     ;; divide dentro de nueve
-                cmp dx, tempPos
-                jz _playGame3               ;; si es igual, calculará otro número
-                mov tempPos, dx             ;; aloja el reusltado
-                invoke printObs, dx, 1      ;; pinta un enemigo 
-            _playGame4:
-                mov ax, actualTime
-                xor dx, dx
-                movzx bx, rewardScoreDur
-                cwd
-                div bx
-                cmp dx, 0
-                jnz _playGame6              ;; si el residuo no es 0, salta
-            _playGame5:
-                call rand                   ;; actualiza randomSeed
-                mov eax, randomSeed
-                xor edx, edx
-                mov ebx, 9
-                cdq
-                div ebx                     ;; divide dentro de nueve
-                cmp dx, tempPos
-                jz _playGame5               ;; si es igual, calculará otro número
-                mov tempPos, dx             ;; aloja el reusltado
-                invoke printObs, dx, 0      ;; pinta un amigo
+             _playGame2:
+            ;     mov ax, actualTime
+            ;     xor dx, dx
+            ;     movzx bx, penaltyScoreDur
+            ;     cwd
+            ;     div bx
+            ;     cmp dx, 0
+            ;     jnz _playGame4              ;; si el residuo no es 0, salta
+            ; _playGame3:
+            ;     call rand                   ;; actualiza randomSeed
+            ;     mov eax, randomSeed
+            ;     xor edx, edx
+            ;     mov ebx, 9
+            ;     cdq
+            ;     div ebx                     ;; divide dentro de nueve
+            ;     cmp dx, tempPos
+            ;     jz _playGame3               ;; si es igual, calculará otro número
+            ;     mov tempPos, dx             ;; aloja el reusltado
+            ;     invoke printObs, dx, 1      ;; pinta un enemigo 
+            ; _playGame4:
+            ;     mov ax, actualTime
+            ;     xor dx, dx
+            ;     movzx bx, rewardScoreDur
+            ;     cwd
+            ;     div bx
+            ;     cmp dx, 0
+            ;     jnz _playGame6              ;; si el residuo no es 0, salta
+            ; _playGame5:
+            ;     call rand                   ;; actualiza randomSeed
+            ;     mov eax, randomSeed
+            ;     xor edx, edx
+            ;     mov ebx, 9
+            ;     cdq
+            ;     div ebx                     ;; divide dentro de nueve
+            ;     cmp dx, tempPos
+            ;     jz _playGame5               ;; si es igual, calculará otro número
+            ;     mov tempPos, dx             ;; aloja el reusltado
+            ;     invoke printObs, dx, 0      ;; pinta un amigo
         ;--------------------------------------------------
         ; Actualiza la pista
         ;--------------------------------------------------
             _playGame6:
-                mov bx, dREf
-                add bx, 1
-                mov ah, 0
-                int 1ah
-                cmp dx, bx
-                jle _playGame7
-                mov dRef, dx
-                call scrollBackground
+                ; mov bx, dREf
+                ; add bx, 1
+                ; mov ah, 0
+                ; int 1ah
+                ; cmp dx, bx
+                ; jle _playGame7
+                ; mov dRef, dx
+                ; call scrollBackground
         ;--------------------------------------------------
         ; Lee el teclado
         ;--------------------------------------------------
             _playGame7:
-                mov ah, 01h
-                int 16h
-                jz _playGame9               ;; no hay nada para leer
-            _playGame8:
-                mov ah, 0h
-                int 16h
-                mov bl, playState           ;; carga el estado del juego
-                .if (ah == 1h)              ;; tecla ESC
-                    .if (bl == 1)           ;; esta pausado
-                        mov ah, 01h
-                        mov cx, tempCX
-                        mov dx, tempDX
-                        int 1ah             ;; reestablece el contador
-                        mov playState, 0    ;; jugando
-                        call printFooter
-                    .else                   ;; está jugando
-                        mov ah, 00h
-                        int 1ah
-                        mov tempCX, cx      ;; guarda el temporizador
-                        mov tempDX, dx      ;; guarda el temporizador
-                        mov playState, 1    ;; pausado
-                        call printFooter
-                    .endif
-                .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
-                    mov bx, pointc
-                    .if (bx != 205)         ;; limite derecho
-                        inc pointc          ;; incrementa la posicion en columna
-                    .endif
-                .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
-                    mov bx, pointc
-                    .if (bx != 70)          ;; limite izquierdo
-                        dec pointc          ;; decrementa la posicion en columna
-                    .endif
-                .elseif (ah == 39h)        ;; barra espaciadora
-                    jmp _playGame12        ;; game over
-                .endif
+            ;     mov ah, 01h
+            ;     int 16h
+            ;     jz _playGame9               ;; no hay nada para leer
+            ; _playGame8:
+            ;     mov ah, 0h
+            ;     int 16h
+            ;     mov bl, playState           ;; carga el estado del juego
+            ;     .if (ah == 1h)              ;; tecla ESC
+            ;         .if (bl == 1)           ;; esta pausado
+            ;             mov ah, 01h
+            ;             mov cx, tempCX
+            ;             mov dx, tempDX
+            ;             int 1ah             ;; reestablece el contador
+            ;             mov playState, 0    ;; jugando
+            ;             call printFooter
+            ;         .else                   ;; está jugando
+            ;             mov ah, 00h
+            ;             int 1ah
+            ;             mov tempCX, cx      ;; guarda el temporizador
+            ;             mov tempDX, dx      ;; guarda el temporizador
+            ;             mov playState, 1    ;; pausado
+            ;             call printFooter
+            ;         .endif
+            ;     .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
+            ;         mov bx, pointc
+            ;         add bx, 2
+            ;         .if (bx >= 205)         ;; limite derecho
+            ;             mov pointc, 205
+            ;         .else
+            ;             mov pointc, bx
+            ;         .endif
+            ;     .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
+            ;         mov bx, pointc
+            ;         sub bx, 2
+            ;         .if (bx <= 70)          ;; limite izquierdo
+            ;             mov pointc, 70
+            ;         .else 
+            ;             mov pointc, bx
+            ;         .endif
+            ;     .elseif (ah == 39h)        ;; barra espaciadora
+            ;         jmp _playGame12        ;; game over
+            ;     .endif
         ;--------------------------------------------------
         ; Determina colisión
         ;--------------------------------------------------
             _playGame9:
-                movzx dx, playState
-                cmp dx, 1                       ;; está pausado
-                jz _playGame0                   ;; regresa al loop principal
-                call carCollision
+        ;         movzx dx, playState
+        ;         cmp dx, 1                       ;; está pausado
+        ;         jz _playGame0                   ;; regresa al loop principal
+        ;         call carCollision
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
-            _playGame10:
-                mov bx, dRef
-                add bx, 1                        ;; se ejecuta cada tick
-                mov ah, 0
-                int 1ah                          ;; recupera el contador del sistema
-                cmp dx, bx                       ;; dx > bx
-                jle _playGame11                  ;; no ha pasado los ticks suficientes
-                mov dRef, dx                     ;; actualiza el dRef
-                call scrollBackground            ;; actualiza el tablero
-                call syncBackground              ;; copia el tablero a la mem de video
-            _playGame11 :
-                call syncCar                     ;; copia el carro a la mem de video
+            ; _playGame10:
+            ;     call syncBackground              ;; copia el tablero a la mem de video
+            ;     call syncCar                     ;; copia el carro a la mem de video
                 jmp _playGame0
     _playGame12:                         ;; game over
         mov al, 2
