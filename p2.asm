@@ -51,6 +51,8 @@ adminOp         db  "  1) Top 10 (punteo)", 0ah, 0dh
 chooseOp        db  "  Elija una opci", 162,"n : $"
 setFileName     db  "  Escriba el nombre del archivo .ply : $"
 wrongExtFile    db  "  Archivo inv", 160,"lido. No coincide la extensi", 162, "n$"
+playFailed      db  "  No hay juego cargado. No se puede iniciar juego$"
+openFileFailed  db  "  No se puede abrir el archivo.$"
 strVar          db  80 dup(0)
 cte1            db  "1$"
 cte2            db  "2$"
@@ -69,10 +71,11 @@ fileBuffChar    db  ?
     mov ax, @data
     mov ds, ax
 main proc near c
+    call loadGameFiles                          ;; carga los archivos del juego
     _mainStart:
         clearScreen                             ;; limpia la pantalla
         invoke headerMain, 0, 9, offset mainmenu5, 33     ;; imprime en [9][0]
-        printStr offset mainmenu                       ;; muestra las opciones disponibles
+        printStr offset mainmenu                ;; muestra las opciones disponibles
         flushStr strVar, 80, 0
         getLine strVar                          ;; recupera la opción del usuario
         compareStr strVar, cte1
@@ -161,17 +164,17 @@ headerMain endp
 ;--------------------------------------------------
 mainUser proc near c
 ; Menú principal para el usuario normal
-;--------------------------------------------------
+;-------------------------------------------------- 
+    flushStr userStr, 10, 32
     mov cx, 10
     xor si, si
-    ;_setUserName:
-        ;mov al, usernameTemp[si]
-        ;cmp al, 0
-        ;jz _mainUser1
-        ;mov userStr[si], al
-        ;_setUserNameIncSi:
-        ;    inc si
-        ;loop _setUserName
+    _setUserName:
+        mov al, usernameTemp[si]
+        cmp al, 0
+        jz _mainUser1
+        mov userStr[si], al
+        inc si
+        loop _setUserName
     _mainUser1:
         clearScreen
         printStr offset header
@@ -190,6 +193,16 @@ mainUser proc near c
         pauseAnyKey
         jmp _mainUser1
     _mainUser2:                                 ;; jugar
+        mov al, gameloaded
+        cmp al, 1
+        jz _mainUser21
+        printStrln offset ln
+        printStrln offset playFailed
+        pauseAnyKey
+        jmp _mainUser1
+        _mainUser21:
+            call initGame
+            call playGame
         jmp _mainUser1
     _mainUser3:                                 ;; cargar
         printStrln offset ln
@@ -205,8 +218,15 @@ mainUser proc near c
         jmp _mainUser1
         _mainUser31:
             openFile strVar, fileHandler        ;; abre el archivo
-            invoke loadLine, fileHandler        ;; carga el archivo
-            closeFile fileHandler               ;; cierra el archivo
+            .if (carry?)
+                printStrln offset ln
+                printStrln offset openFileFailed
+            .else
+                push ds
+                invoke loadLine, fileHandler        ;; carga el archivo
+                pop ds
+                closeFile fileHandler               ;; cierra el archivo
+            .endif
             pauseAnyKey
             jmp _mainUser1
     _mainUser4:
