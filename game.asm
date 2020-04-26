@@ -56,16 +56,11 @@ include string.asm
 .code
 
 ;--------------------------------------------------
-copyLevelName macro idx
+copyLevelName proc near c uses eax ebx ecx esi edi,  idx : word
 ; Dado el valor de idx, copia el el nombre alojado en 
 ; lvlStr a levelStr
 ;--------------------------------------------------
-    local _cLN1, _cLN2
-    push cx
-    push di
-    push si
-    push ax
-    push bx
+    flushStr levelStr, 12, 32
     mov cx, 10
     mov bx, idx
     shl bx, 1
@@ -85,15 +80,12 @@ copyLevelName macro idx
     mov ah, ':'
     mov levelStr[di], ah
     mov ax, idx
+    inc ax
     xor ah, ah
     add al, '0'
     mov levelStr[di + 1], al
-    pop bx
-    pop ax
-    pop si
-    pop di
-    pop cx
-endm
+    ret
+copyLevelName endp
 
 ;--------------------------------------------------
 setColor proc near c uses eax ebx ecx edx esi edi, idx : word
@@ -223,7 +215,7 @@ initGame proc far c
     xor ax, ax
     mov al, lvlsDur[di]
     mov actualLvlDur, ax                  ;; temporizador para el nivel actual
-    copyLevelName 0                       ;; copia el valor para el nivel uno
+    invoke copyLevelName, 0                       ;; copia el valor para el nivel uno
     ; reserva la memoria para la pista
     mov ah, 48h
     mov bx, 2025
@@ -878,7 +870,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 mov al, lvlsScoDur[di] 
                 mov rewardScoreDur, al      ;; temporizador para bloque amigo
                 invoke setColor, di         ;; coloca el color según la pos 0
-                copyLevelName di           ;; indica el nombre de nivel
+                invoke copyLevelName, di           ;; indica el nombre de nivel
                 call printHeader
                 inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
