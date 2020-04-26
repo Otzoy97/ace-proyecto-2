@@ -208,6 +208,7 @@ initGame proc far c
 ; Reinicia todas las variables globales del juego
 ;--------------------------------------------------
     ; Carga info y reinicia variables
+    mov actualTime, 0
     mov actualScore, 3
     mov di, 0
     mov actualLevel, 1                    ;; comienza en nivel 1
@@ -222,7 +223,6 @@ initGame proc far c
     xor ax, ax
     mov al, lvlsDur[di]
     mov actualLvlDur, ax                  ;; temporizador para el nivel actual
-    invoke setColor, 0                    ;; coloca el color según la pos 0
     copyLevelName 0                       ;; copia el valor para el nivel uno
     ; reserva la memoria para la pista
     mov ah, 48h
@@ -275,7 +275,7 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         readFile nameFile, charBuffer, 1  ;; lee un caracter
         mov dx, j                   ;; determina si se ha reiniciado el indice (i)
         cmp dx, 6               
-        jge _getLine6               ;; lee hasta 6 líneas
+        jae _getLine6               ;; lee hasta 6 líneas
         cmp ax, 0                   ;; se leyó algo?
         jnz _getLine11
         mov dx, i
@@ -315,41 +315,32 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         mov lvlsPenalty[di], dl
         invoke validateNumber, 60   ;; punteo premio
         mov lvlsScore[di], dl
-            mov dl, 'r'
-            mov dh, 'R'
-            cmp es:[70], dl
-            jnz _esVerde
-            cmp es:[70], dh
-            jnz _esVerde
-            mov al, 'r'
-            mov lvlsColor[di], al       ;; guarda el color del auto
-        _esVerde:
-            mov dl, 'v'
-            mov dh, 'V'
-            cmp es:[70], dl
-            jnz _esAzul
-            cmp es:[70], dh
-            jnz _esAzul
-            mov al, 'v'
-            mov lvlsColor[di], al       ;; guarda el color del auto
-        _esAzul:
-            mov dl, 'a'
-            mov dh, 'A'
-            cmp es:[70], dl
-            jnz _esBlanco
-            cmp es:[70], dh
-            jnz _esBlanco
-            mov al, 'a'
-            mov lvlsColor[di], al       ;; guarda el color del auto
-        _esBlanco:
-            mov dl, 'b'
-            mov dh, 'B'
-            cmp es:[70], dl
-            jnz _getLine7
-            cmp es:[70], dh
-            jnz _getLine7
-            mov al, 'b'
-            mov lvlsColor[di], al       ;; guarda el color del auto
+        mov dl, 'r'
+        mov dh, 'R'
+        .if (es:[70] == dl || es:[70] == dh)
+            mov charBuffer, dl
+            printChar charBuffer
+            mov ax, di
+            add ax, '0'
+            printChar al
+            mov charBuffer, 0
+            mov lvlsColor[di], dl
+        .endif
+        mov dl, 'v'
+        mov dh, 'V'
+        .if (es:[70] == dl || es:[70] == dh)
+            mov lvlsColor[di], dl
+        .endif
+        mov dl, 'a'
+        mov dh, 'A'
+        .if (es:[70] == dl || es:[70] == dh)
+            mov lvlsColor[di], dl
+        .endif
+        mov dl, 'b'
+        mov dh, 'B'
+        .if (es:[70] == dl || es:[70] == dh)
+            mov lvlsColor[di], dl
+        .endif
         _getLine7:
             shl di, 1                   ;; multiplica por dos
             mov bx, di                  ;; guarda el valor di*2
@@ -369,6 +360,7 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
             _getLine5:                  ;; repite el proceso
                 xor di, di
                 mov cx, 80              ;; establece el número de repeticiones para el loop
+                mov i, 0                ;; reinicia la variable i
                 inc j                   ;; aumenta j
                 jmp _getLine0
     _getLine6:
@@ -631,6 +623,9 @@ toAsciiT endp
 timeComposing proc near c uses eax ebx ecx edx
 ; Compone el tiempo transcurrido en hh:mm:ss
 ;--------------------------------------------------
+    flushStr horaG, 2, '0'      ;; llena de ceros ASCII
+    flushStr minuG, 2, '0'
+    flushStr segsG, 2, '0'
     mov ax, actualTime
     mov bx, 60
     xor dx, dx
@@ -838,6 +833,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
     mov cx, 32400
     cld                                  ;; limpia el registro de flags
     rep stosb                            ;; pinta de gris el escenario
+    invoke setColor, 0
     call printFrame                      ;; pinta el marco del juego
     call printFooter                     ;; pinta el pie de página
     call printHeader
@@ -862,29 +858,29 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Actualiza el nivel
         ;--------------------------------------------------
             _playGame1:
-                ; mov bx, actualTime
-                ; cmp bx, actualLvlDur
-                ; jl _playGame2               ;; bx < actualLvlDur --> Coloca nuevo obstaculo
-                ; movzx di, actualLevel
-                ; cmp di, 6
-                ; jz _playGame12              ;; si es igual a 6, se salta a game over
-                ; xor ax, ax
-                ; mov al, lvlsDur[di]
-                ; cmp al, 0
-                ; jz _playGame12              ;; si es 0, se salta a game over
-                ; add actualLvlDur, ax        ;; temporizador para el nivel actual
-                ; mov al, lvlsPenalty[di]
-                ; mov penaltyScore, al        ;; punteo menos para nivel di
-                ; mov al, lvlsScore[di]
-                ; mov rewardScore, al         ;; punteo más para nivel di
-                ; mov al, lvlsPenDur[di] 
-                ; mov penaltyScoreDur, al     ;; temporizador para bloque enemigo
-                ; mov al, lvlsScoDur[di] 
-                ; mov rewardScoreDur, al      ;; temporizador para bloque amigo
-                ; invoke setColor, di         ;; coloca el color según la pos 0
-                ; copyLevelName di           ;; indica el nombre de nivel
-                ; call printHeader
-                ; inc actualLevel             ;; incrementa el nivel
+                mov bx, actualTime
+                cmp bx, actualLvlDur
+                jb _playGame2               ;; bx < actualLvlDur --> Coloca nuevo obstaculo
+                movzx di, actualLevel
+                cmp di, 6
+                jz _playGame12              ;; si es igual a 6, se salta a game over
+                xor ax, ax
+                mov al, lvlsDur[di]
+                cmp al, 0
+                jz _playGame12              ;; si es 0, se salta a game over
+                add actualLvlDur, ax        ;; temporizador para el nivel actual
+                mov al, lvlsPenalty[di]
+                mov penaltyScore, al        ;; punteo menos para nivel di
+                mov al, lvlsScore[di]
+                mov rewardScore, al         ;; punteo más para nivel di
+                mov al, lvlsPenDur[di] 
+                mov penaltyScoreDur, al     ;; temporizador para bloque enemigo
+                mov al, lvlsScoDur[di] 
+                mov rewardScoreDur, al      ;; temporizador para bloque amigo
+                invoke setColor, di         ;; coloca el color según la pos 0
+                copyLevelName di           ;; indica el nombre de nivel
+                call printHeader
+                inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
         ; Colocar nuevo obstáculo
         ;--------------------------------------------------
@@ -942,48 +938,48 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Lee el teclado
         ;--------------------------------------------------
             _playGame7:
-            ;     mov ah, 01h
-            ;     int 16h
-            ;     jz _playGame9               ;; no hay nada para leer
-            ; _playGame8:
-            ;     mov ah, 0h
-            ;     int 16h
-            ;     mov bl, playState           ;; carga el estado del juego
-            ;     .if (ah == 1h)              ;; tecla ESC
-            ;         .if (bl == 1)           ;; esta pausado
-            ;             mov ah, 01h
-            ;             mov cx, tempCX
-            ;             mov dx, tempDX
-            ;             int 1ah             ;; reestablece el contador
-            ;             mov playState, 0    ;; jugando
-            ;             call printFooter
-            ;         .else                   ;; está jugando
-            ;             mov ah, 00h
-            ;             int 1ah
-            ;             mov tempCX, cx      ;; guarda el temporizador
-            ;             mov tempDX, dx      ;; guarda el temporizador
-            ;             mov playState, 1    ;; pausado
-            ;             call printFooter
-            ;         .endif
-            ;     .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
-            ;         mov bx, pointc
-            ;         add bx, 2
-            ;         .if (bx >= 205)         ;; limite derecho
-            ;             mov pointc, 205
-            ;         .else
-            ;             mov pointc, bx
-            ;         .endif
-            ;     .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
-            ;         mov bx, pointc
-            ;         sub bx, 2
-            ;         .if (bx <= 70)          ;; limite izquierdo
-            ;             mov pointc, 70
-            ;         .else 
-            ;             mov pointc, bx
-            ;         .endif
-            ;     .elseif (ah == 39h)        ;; barra espaciadora
-            ;         jmp _playGame12        ;; game over
-            ;     .endif
+                mov ah, 01h
+                int 16h
+                jz _playGame9               ;; no hay nada para leer
+            _playGame8:
+                mov ah, 0h
+                int 16h
+                mov bl, playState           ;; carga el estado del juego
+                .if (ah == 1h)              ;; tecla ESC
+                    .if (bl == 1)           ;; esta pausado
+                        mov ah, 01h
+                        mov cx, tempCX
+                        mov dx, tempDX
+                        int 1ah             ;; reestablece el contador
+                        mov playState, 0    ;; jugando
+                        call printFooter
+                    .else                   ;; está jugando
+                        mov ah, 00h
+                        int 1ah
+                        mov tempCX, cx      ;; guarda el temporizador
+                        mov tempDX, dx      ;; guarda el temporizador
+                        mov playState, 1    ;; pausado
+                        call printFooter
+                    .endif
+                .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
+                    mov bx, pointc
+                    add bx, 2
+                    .if (bx >= 205)         ;; limite derecho
+                        mov pointc, 205
+                    .else
+                        mov pointc, bx
+                    .endif
+                .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
+                    mov bx, pointc
+                    sub bx, 2
+                    .if (bx <= 70)          ;; limite izquierdo
+                        mov pointc, 70
+                    .else 
+                        mov pointc, bx
+                    .endif
+                .elseif (ah == 39h)        ;; barra espaciadora
+                    jmp _playGame12        ;; game over
+                .endif
         ;--------------------------------------------------
         ; Determina colisión
         ;--------------------------------------------------
@@ -996,8 +992,8 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Refresca la pantalla
         ;--------------------------------------------------
             ; _playGame10:
-            ;     call syncBackground              ;; copia el tablero a la mem de video
-            ;     call syncCar                     ;; copia el carro a la mem de video
+                call syncBackground              ;; copia el tablero a la mem de video
+                call syncCar                     ;; copia el carro a la mem de video
                 jmp _playGame0
     _playGame12:                         ;; game over
         mov al, 2
