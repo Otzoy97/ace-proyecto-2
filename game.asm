@@ -18,6 +18,7 @@ include string.asm
     carFN           db "car.otz", 00     ;; archivo que DEBE de existir
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
+    scoresFN        db "puntos.rep", 00   ;; archivo que DEBE de existir
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
     userStr         db "          "
@@ -483,25 +484,6 @@ printFrame proc near c
     ret
 printFrame endp
 
-; ;--------------------------------------------------
-; syncCar proc near c uses ebx eax
-; ; Printa la capa del carro
-; ; Utiliza la variable que almacena el modelo como doble buffer
-; ;--------------------------------------------------
-;     ;; cuerpo del carro
-;     ;; comienza en 137 * 320 + pointc
-;     mov bx, 43840
-;     add bx, pointc
-;     ;; sincronizar video con la imagen de carro
-;     ;; en la posición de memoria de video = bx
-;     ;; la figura tiene una base de 45
-;     ;; se pintará 40 posiciones
-;     ;; la figura se leerá desde la posición 0
-;     mov ax, @data
-;     invoke syncBuffer, ax, bx, 45, 40, offset car
-;     ret
-; syncCar endp
-
 ;--------------------------------------------------
 printObs proc near c uses eax ebx ecx edx esi edi, pos : word, bType : byte
 ; POS :   BYTE indica la posición a donde pintar [0 - 8]
@@ -563,7 +545,8 @@ syncMem proc near c uses edi esi
     push es
     mov i, 0
     mov pointoff, 21060                 ;; 180 * 117
-    add pointoff, pointc                ;; suma el punto (de posición) en columna
+    mov ax, pointc
+    add pointoff, ax                    ;; suma el punto (de posición) en columna
     sub pointoff, 70                    ;; le resta el offset de control
     mov ax, lram
     mov es, ax
@@ -600,22 +583,6 @@ syncMem proc near c uses edi esi
     invoke syncBuffer, lram, 6470, 180, 160, 0
     ret
 syncMem endp
-
-; ;--------------------------------------------------
-; syncBackground proc near c
-; ; copia el contenido de vram a lram y pinta el carro en la posición dada
-; ;--------------------------------------------------
-;     local lram : word
-;     ;; cuadrado completo
-;     ;; comienza en 20 * 320 + 70 = 6470
-;     ;; sincronizar video con el fondo gris
-;     ;; en la posición de memoria 6470
-;     ;; la figura tiene una base de 180
-;     ;; se pintará 160 posiciones
-;     ;; la figura se leerá desde la posición 3600
-;     invoke syncBuffer, vram, 6470, 180, 160, 3600
-;     ret
-; syncBackground endp
 
 ;--------------------------------------------------
 scrollBackground proc near c 
@@ -781,9 +748,10 @@ carCollision proc near c uses eax ebx edx edi
 ; determina si el color es verde (2) o amarillo (42)
 ; Luego actualiza el punteo
 ;--------------------------------------------------
-    local col : word, i : word
+    local col : word, i : word, flag : word
     push ds
     push es
+    mov flag, 1                     ;; determinará si es game over o no {1 = no, 0 = gg}
     mov i, 0
     mov ax, pointc
     mov col, ax
@@ -811,7 +779,8 @@ carCollision proc near c uses eax ebx edx edi
         jge _collVertical11
             mov actualScore, 0
             mov scoreStr, '0'
-            jmp _collVertical12
+            mov flag, 0             ;; gg
+            jmp _collVertical4
         _collVertical11:
             sub actualScore, bx
             flushStr scoreStr, 8, 32
@@ -843,6 +812,8 @@ carCollision proc near c uses eax ebx edx edi
     _collVertical4:
     pop es
     pop ds
+    mov ax, flag
+    cmp ax, 1
     ret
 carCollision endp
 
@@ -853,7 +824,11 @@ endGame proc near c
 ;--------------------------------------------------
     mov dx, vram
     mov es, dx
-    mov ah, 49h
+    mov ah, 49h                 ;; libera la memoria
+    int 21h
+    mov dx, lram
+    mov es, dx
+    mov ah, 49h                 ;; libera la memoria
     int 21h
     mov ax, 0003h
     int 10h 
@@ -867,6 +842,8 @@ saveScores proc near c
 ; Escriba esta información al final del archivo de puntuación
 ; USER;SCORE;SECS;LVL
 ;--------------------------------------------------
+    openFile scoresFN, fileHandler
+    
     ret
 saveScores endp
 
@@ -1064,6 +1041,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 cmp dx, 1                       ;; está pausado
                 jz _playGame0                   ;; regresa al loop principal
                 call carCollision
+                jnz _playGame12
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
