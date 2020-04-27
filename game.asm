@@ -11,6 +11,7 @@ include string.asm
     ;--------------------------------------------------
     pointc          dw 137               ;; posición inicial 137 (columna)
     vram            dw ?                 ;; almacena el offset del doble buffer para el fondo del juego
+    lram            dw ?                 ;; almacena el offset del doble buffer para escribir en memoria de video
     car             db 1800 dup(0)       ;; almacena el modelo del carro
     good            db 400 dup(0)        ;; almacena el modelo del bloque bueno
     bad             db 400 dup(0)        ;; almacena el modelo del bloque malo
@@ -200,6 +201,7 @@ initGame proc far c uses eax ebx ecx edx esi edi
 ; Reinicia todas las variables globales del juego
 ;--------------------------------------------------
     ; Carga info y reinicia variables
+    flushStr scoreStr, 8, 32
     mov actualTime, 0
     mov actualScore, 3
     mov di, 0
@@ -215,13 +217,16 @@ initGame proc far c uses eax ebx ecx edx esi edi
     xor ax, ax
     mov al, lvlsDur[di]
     mov actualLvlDur, ax                  ;; temporizador para el nivel actual
-    invoke copyLevelName, 0                       ;; copia el valor para el nivel uno
-    ; reserva la memoria para la pista
+    invoke copyLevelName, 0               ;; copia el valor para el nivel uno
     mov ah, 48h
-    mov bx, 2025
+    mov bx, 2025                          ;; reserva la memoria para la pista
     int 21h
     ;jc _initGameFailed
     mov vram, ax
+    mov ah, 48h
+    mov bx, 1800
+    int 21h                               ;; reserva la memoria para el video
+    mov lram, ax
     mov ax, 13h
     int 10h                               ;; inicia el modo video
     mov ax, 1
@@ -478,24 +483,24 @@ printFrame proc near c
     ret
 printFrame endp
 
-;--------------------------------------------------
-syncCar proc near c uses ebx eax
-; Printa la capa del carro
-; Utiliza la variable que almacena el modelo como doble buffer
-;--------------------------------------------------
-    ;; cuerpo del carro
-    ;; comienza en 137 * 320 + pointc
-    mov bx, 43840
-    add bx, pointc
-    ;; sincronizar video con la imagen de carro
-    ;; en la posición de memoria de video = bx
-    ;; la figura tiene una base de 45
-    ;; se pintará 40 posiciones
-    ;; la figura se leerá desde la posición 0
-    mov ax, @data
-    invoke syncBuffer, ax, bx, 45, 40, offset car
-    ret
-syncCar endp
+; ;--------------------------------------------------
+; syncCar proc near c uses ebx eax
+; ; Printa la capa del carro
+; ; Utiliza la variable que almacena el modelo como doble buffer
+; ;--------------------------------------------------
+;     ;; cuerpo del carro
+;     ;; comienza en 137 * 320 + pointc
+;     mov bx, 43840
+;     add bx, pointc
+;     ;; sincronizar video con la imagen de carro
+;     ;; en la posición de memoria de video = bx
+;     ;; la figura tiene una base de 45
+;     ;; se pintará 40 posiciones
+;     ;; la figura se leerá desde la posición 0
+;     mov ax, @data
+;     invoke syncBuffer, ax, bx, 45, 40, offset car
+;     ret
+; syncCar endp
 
 ;--------------------------------------------------
 printObs proc near c uses eax ebx ecx edx esi edi, pos : word, bType : byte
@@ -550,19 +555,67 @@ printObs proc near c uses eax ebx ecx edx esi edi, pos : word, bType : byte
 printObs endp
 
 ;--------------------------------------------------
-syncBackground proc near c
-; Pinta el interior del marco del juego
+syncMem proc near c uses edi esi
+; Copia el contenido de vram a lram y pinta el carro 
+; en la posición dada por pointc
 ;--------------------------------------------------
-    ;; cuadrado completo
-    ;; comienza en 20 * 320 + 70 = 6470
-    ;; sincronizar video con el fondo gris
-    ;; en la posición de memoria 6470
-    ;; la figura tiene una base de 180
-    ;; se pintará 160 posiciones
-    ;; la figura se leerá desde la posición 3600
-    invoke syncBuffer, vram, 6470, 180, 160, 3600
+    local i : word, pointoff : word
+    push es
+    mov i, 0
+    mov pointoff, 21060                 ;; 180 * 117
+    add pointoff, pointc                ;; suma el punto (de posición) en columna
+    sub pointoff, 70                    ;; le resta el offset de control
+    mov ax, lram
+    mov es, ax
+    mov ax, vram
+    mov ds, ax
+    mov si, 3600                        ;; copia desde la posición 3600 = 20*180
+    xor di, di                          ;; se copia a la posición 0
+    mov cx, 28800                       ;; 160 * 180
+    cld 
+    rep movsb
+    mov ax, @data
+    mov ds, ax                          ;; reestablece el segmento de datos
+    mov si, offset car
+    _1:
+        cmp i, 40
+        jae _2
+        mov ax, i
+        shl ax, 2                       ;; i * 4
+        mov di, ax                      ;; i * 4
+        shl ax, 2                       ;; i * 4 * 4
+        add di, ax                      ;; i * 4 + i * 16
+        shl ax, 1                       ;; i * 4 * 4 * 2
+        add di, ax                      ;; i * 4 + i * 16 + i * 32
+        shl ax, 2                       ;; i * 4 * 4 * 2 * 4
+        add di, ax                      ;; i * 4 + i * 16 + i * 32 + i * 128
+        add di, pointoff
+        mov cx, 45
+        cld
+        rep movsb
+        inc i
+        jmp _1
+    _2:
+    pop es
+    invoke syncBuffer, lram, 6470, 180, 160, 0
     ret
-syncBackground endp
+syncMem endp
+
+; ;--------------------------------------------------
+; syncBackground proc near c
+; ; copia el contenido de vram a lram y pinta el carro en la posición dada
+; ;--------------------------------------------------
+;     local lram : word
+;     ;; cuadrado completo
+;     ;; comienza en 20 * 320 + 70 = 6470
+;     ;; sincronizar video con el fondo gris
+;     ;; en la posición de memoria 6470
+;     ;; la figura tiene una base de 180
+;     ;; se pintará 160 posiciones
+;     ;; la figura se leerá desde la posición 3600
+;     invoke syncBuffer, vram, 6470, 180, 160, 3600
+;     ret
+; syncBackground endp
 
 ;--------------------------------------------------
 scrollBackground proc near c 
@@ -682,7 +735,7 @@ eraseObs proc near c uses eax ebx ecx edx esi edi, posErase : word
 ; Elimina un obstaculo que encaja entre las columnas :
 ; [posErase * 20, posErase * 20 + 20)
 ;--------------------------------------------------
-    local i : word, posInicial : word, pos20: word
+    local i : word, posInicial : word
     push ds
     push es
     mov i, 0                        ;; i = 0
@@ -728,24 +781,21 @@ carCollision proc near c uses eax ebx edx edi
 ; determina si el color es verde (2) o amarillo (42)
 ; Luego actualiza el punteo
 ;--------------------------------------------------
-    local rPointC : word, col : word, i : word
+    local col : word, i : word
     push ds
     push es
     mov i, 0
     mov ax, pointc
-    mov rPointC, ax
-    mov col, ax                     ;; pos en columna
-    sub rPointC, 70                 ;; recupera la posición relativa a la pista
-    add rPointC, 7                  ;; solo comprueba choque en el parachoque :v
+    mov col, ax
+    sub col, 63                     ;; comenzará 63 puntos antes
     mov dx, vram
     mov es, dx                      ;; carga dato extra
     mov ax, 24660                   ;; 137 x 180
-    add ax, rPointC                 ;; recupera la posición absoluta en la pista
-    mov rPointC, ax
+    add ax, col
     mov di, ax
     _collVertical:
         cmp i, 31                   ;; verificará en 31 posiciones
-        jge _collVertical4          ;; terminará el proceso
+        jg _collVertical4          ;; terminará el proceso
         mov dl, 2                   ;; color verde -> enemigo
         cmp es:[di], dl
         jnz _collVertical2          ;; es un enemigo
@@ -754,18 +804,21 @@ carCollision proc near c uses eax ebx edx edi
         xor dx, dx
         cwd
         div bx                      ;; divide dentro de 20
-        invoke eraseObs, dx         ;; elimina el enemigo encontrado
+        invoke eraseObs, ax         ;; elimina el enemigo encontrado
         mov ax, actualScore
         movzx bx, penaltyScore
-        .if (ax < bx)               ;; evita overflow
-            mov actualScore, 0      ;; actualiza el punteo
-        .else
-            sub actualScore, bx     ;; actualiza el punteo
-        .endif       
-        flushStr scoreStr, 8, 32
-        mov ax, actualScore
-        invoke toAsciiT, offset scoreStr
-        call printHeader            ;; actualiza el encabezado
+        cmp ax, bx
+        jge _collVertical11
+            mov actualScore, 0
+            mov scoreStr, '0'
+            jmp _collVertical12
+        _collVertical11:
+            sub actualScore, bx
+            flushStr scoreStr, 8, 32
+            mov ax, actualScore
+            invoke toAsciiT, offset scoreStr
+        _collVertical12:
+            call printHeader        ;; actualiza el encabezado
     _collVertical2:
         mov dh, 42                  ;; color amarillo -> amigo
         cmp es:[di], dh
@@ -774,9 +827,9 @@ carCollision proc near c uses eax ebx edx edi
         mov bx, 20
         xor dx, dx
         cwd
-        div bx                      ;; divide dentor de 20
-        invoke eraseObs, dx         ;; elimina al amigo encontrado
-        movzx bx, penaltyScore
+        div bx                      ;; divide dentro de 20
+        invoke eraseObs, ax         ;; elimina al amigo encontrado
+        movzx bx, rewardScore
         add actualScore, bx         ;; actualiza el punteo
         flushStr scoreStr, 8, 32
         mov ax, actualScore
@@ -848,7 +901,6 @@ playGame proc far c uses eax ebx ecx edx esi edi
     mov ax, actualScore
     invoke toAsciiT, offset scoreStr
     call printFrame                      ;; pinta el marco del juego
-    call printFooter                     ;; pinta el pie de página
     call printHeader
     _playGame0:                          ;; este ciclo maneja todo el juego
         ;--------------------------------------------------
@@ -957,7 +1009,6 @@ playGame proc far c uses eax ebx ecx edx esi edi
                     call scrollBackground
                     call scrollBackground
                     call scrollBackground
-                    call scrollBackground
                 .endif 
         ;--------------------------------------------------
         ; Lee el teclado
@@ -977,7 +1028,6 @@ playGame proc far c uses eax ebx ecx edx esi edi
                         mov dx, tempDX
                         int 1ah             ;; reestablece el contador
                         mov playState, 0    ;; jugando
-                        call printFooter
                     .else                   ;; está jugando
                         mov ah, 00h
                         int 1ah
@@ -985,10 +1035,11 @@ playGame proc far c uses eax ebx ecx edx esi edi
                         mov tempDX, dx      ;; guarda el temporizador
                         mov playState, 1    ;; pausado
                         call printFooter
+                        call printFrame     ;; imprime de nuevo el marco
                     .endif
                 .elseif (ah == 4dh && bl == 0)        ;; flecha derecha
                     mov bx, pointc
-                    add bx, 2
+                    add bx, 5
                     .if (bx >= 205)         ;; limite derecho
                         mov pointc, 205
                     .else
@@ -996,7 +1047,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
                     .endif
                 .elseif (ah == 4bh && bl == 0)        ;; flecha izquierda
                     mov bx, pointc
-                    sub bx, 2
+                    sub bx, 5
                     .if (bx <= 70)          ;; limite izquierdo
                         mov pointc, 70
                     .else 
@@ -1009,23 +1060,29 @@ playGame proc far c uses eax ebx ecx edx esi edi
         ; Determina colisión
         ;--------------------------------------------------
             _playGame9:
-        ;         movzx dx, playState
-        ;         cmp dx, 1                       ;; está pausado
-        ;         jz _playGame0                   ;; regresa al loop principal
-        ;         call carCollision
+                movzx dx, playState
+                cmp dx, 1                       ;; está pausado
+                jz _playGame0                   ;; regresa al loop principal
+                call carCollision
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
             _playGame10:
-                call syncBackground              ;; copia el tablero a la mem de video
-                call syncCar                     ;; copia el carro a la mem de video
+                call syncMem              ;; copia el tablero a la mem de video
                 jmp _playGame0
     _playGame12:                         ;; game over
         mov al, 2
         mov playState, 2
         call printFooter
-        mov ah, 10h
-        int 16h                          ;; espera por una tecla
+        call printFrame
+        _playGame13:
+            mov ah, 01h
+            int 16h                      ;; espera por una tecla
+            jz _playGame13
+            mov ah, 00h
+            int 16h
+            cmp ah, 1h                   ;; espera por la tecla ESC
+            jnz _playGame13
         call endGame                     ;; termina con el modo video
     ret
 playGame endp
