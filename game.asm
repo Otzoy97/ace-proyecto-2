@@ -194,7 +194,7 @@ loadGameFiles proc far c
 loadGameFiles endp
 
 ;--------------------------------------------------
-initGame proc far c
+initGame proc far c uses eax ebx ecx edx esi edi
 ; Reserva la memoria para el doble buffer del escenario
 ; Carga la información del primer nivel
 ; Reinicia todas las variables globales del juego
@@ -225,6 +225,18 @@ initGame proc far c
     mov ax, 13h
     int 10h                               ;; inicia el modo video
     mov ax, 1
+    mov cx, 9
+    mov ebx, 9
+    _1:
+        call rand
+        mov eax, randomSeed
+        xor edx, edx
+        cdq
+        div ebx
+        add edx, '0'
+        mov al, dl
+        printChar al
+        loop _1
     ;jmp _initGame1
     ;_initGameFailed:
     ;    mov ax, 0
@@ -486,24 +498,23 @@ syncCar proc near c uses ebx eax
 syncCar endp
 
 ;--------------------------------------------------
-printObs proc near c, pos : word, bType : byte
+printObs proc near c uses eax ebx ecx edx esi edi, pos : word, bType : byte
 ; POS :   BYTE indica la posición a donde pintar [0 - 8]
 ; BTYPE : BYTE indica el tipo de obstacula a pintar
 ;         0 - amigo 1 - enemigo
 ; Pinta un obstaculo puede ser pintado en 0, 20, 40, 60, 80, 100, 120, 140, 160
 ;--------------------------------------------------
     local i : word, offPos : word
-    pushad
     push es
     push ds
     mov i, 0                ;; i = 0
     mov offPos, 0
     mov ax, pos
     shl ax, 2               ;; ax * 4
-    mov bx, ax
-    shl ax, 1               ;; ax * 4 * 2
-    add bx, ax
-    mov offPos, ax
+    mov bx, ax              ;; ax * 4
+    shl ax, 2               ;; ax * 4 * 4
+    add bx, ax              ;; ax * 4 + ax * 16
+    mov offPos, bx
     cmp bType, 1
     jz  _printEnemy         ;; es un enemigo
         mov si, offset good
@@ -535,7 +546,6 @@ printObs proc near c, pos : word, bType : byte
     _printObsSync1:
         pop ds
         pop es
-        popad
         ret
 printObs endp
 
@@ -799,7 +809,7 @@ endGame endp
 
 ;--------------------------------------------------
 saveScores proc near c
-; Recupera la información, tal como el nombre del usuario
+; Recupera la información, como el nombre del usuario
 ; puntuación total, segundos jugados y el nivel alcanzado
 ; Escriba esta información al final del archivo de puntuación
 ; USER;SCORE;SECS;LVL
@@ -811,7 +821,9 @@ saveScores endp
 playGame proc far c uses eax ebx ecx edx esi edi 
 ; Controla las mecánicas del juego
 ;--------------------------------------------------
-    local dRef : word, dCtTime : word, tempPos : word, tempDX : word, tempCX : word
+    local dRef : word, dCtTime : word, tempPos : word, tempDX : word, tempCX : word, prevTP : word, prevTS : word
+    mov prevTP, 0
+    mov prevTS, 0
     mov dRef, 0
     mov playState, 0                     ;; estado actual  = 0 <-> jugando
     mov dCtTime, 0
@@ -879,50 +891,58 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 mov al, lvlsScoDur[di] 
                 mov rewardScoreDur, al      ;; temporizador para bloque amigo
                 invoke setColor, di         ;; coloca el color según la pos 0
-                invoke copyLevelName, di           ;; indica el nombre de nivel
+                invoke copyLevelName, di    ;; indica el nombre de nivel
                 call printHeader
                 inc actualLevel             ;; incrementa el nivel
         ;--------------------------------------------------
         ; Colocar nuevo obstáculo
         ;--------------------------------------------------
-             _playGame2:
-            ;     mov ax, actualTime
-            ;     xor dx, dx
-            ;     movzx bx, penaltyScoreDur
-            ;     cwd
-            ;     div bx
-            ;     cmp dx, 0
-            ;     jnz _playGame4              ;; si el residuo no es 0, salta
-            ; _playGame3:
-            ;     call rand                   ;; actualiza randomSeed
-            ;     mov eax, randomSeed
-            ;     xor edx, edx
-            ;     mov ebx, 9
-            ;     cdq
-            ;     div ebx                     ;; divide dentro de nueve
-            ;     cmp dx, tempPos
-            ;     jz _playGame3               ;; si es igual, calculará otro número
-            ;     mov tempPos, dx             ;; aloja el reusltado
-            ;     invoke printObs, dx, 1      ;; pinta un enemigo 
-            ; _playGame4:
-            ;     mov ax, actualTime
-            ;     xor dx, dx
-            ;     movzx bx, rewardScoreDur
-            ;     cwd
-            ;     div bx
-            ;     cmp dx, 0
-            ;     jnz _playGame6              ;; si el residuo no es 0, salta
-            ; _playGame5:
-            ;     call rand                   ;; actualiza randomSeed
-            ;     mov eax, randomSeed
-            ;     xor edx, edx
-            ;     mov ebx, 9
-            ;     cdq
-            ;     div ebx                     ;; divide dentro de nueve
-            ;     cmp dx, tempPos
-            ;     jz _playGame5               ;; si es igual, calculará otro número
-            ;     mov tempPos, dx             ;; aloja el reusltado
-            ;     invoke printObs, dx, 0      ;; pinta un amigo
+            _playGame2:
+                mov ax, actualTime
+                mov bl, penaltyScoreDur
+                div bl
+                cmp ah, 0
+                jnz _playGame4              ;; si el residuo no es 0, salta
+                mov dx, actualTime
+                cmp dx, prevTP
+                jz _playGame4               ;; si son iguales, no pinta
+            _playGame3:
+                mov ax, actualTime
+                mov prevTP, ax      ;; actualiza el tiempo actual
+                _playGame31:
+                    call rand                   ;; actualiza randomSeed
+                    mov eax, randomSeed
+                    xor edx, edx
+                    mov ebx, 9
+                    cdq
+                    div ebx                     ;; divide dentro de nueve
+                    cmp dx, tempPos
+                    jz _playGame31              ;; si es igual, calculará otro número
+                    mov tempPos, dx             ;; aloja el reusltado
+                    invoke printObs, dx, 1      ;; pinta un enemigo 
+            _playGame4:
+                mov ax, actualTime
+                mov bl, rewardScoreDur
+                div bl
+                cmp ah, 0
+                jnz _playGame6              ;; si el residuo no es 0, salta
+                mov dx, actualTime
+                cmp dx, prevTS
+                jz _playGame6               ;; si son iguales, no pinta
+            _playGame5:
+                mov ax, actualTime
+                mov prevTS, ax
+                _plaGame51:
+                    call rand                   ;; actualiza randomSeed
+                    mov eax, randomSeed
+                    xor edx, edx
+                    mov ebx, 9
+                    cdq
+                    div ebx                     ;; divide dentro de nueve
+                    cmp dx, tempPos
+                    jz _plaGame51               ;; si es igual, calculará otro número
+                    mov tempPos, dx             ;; aloja el reusltado
+                    invoke printObs, dx, 0      ;; pinta un amigo
         ;--------------------------------------------------
         ; Actualiza la pista
         ;--------------------------------------------------
@@ -931,10 +951,14 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 add bx, 1
                 mov ah, 0
                 int 1ah
-                cmp dx, bx
-                jle _playGame7
-                mov dRef, dx
-                call scrollBackground
+                .if (dx > bx)
+                    mov dRef, dx
+                    call scrollBackground
+                    call scrollBackground
+                    call scrollBackground
+                    call scrollBackground
+                    call scrollBackground
+                .endif 
         ;--------------------------------------------------
         ; Lee el teclado
         ;--------------------------------------------------
