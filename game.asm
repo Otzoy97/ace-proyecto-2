@@ -40,6 +40,7 @@ include string.asm
     lvlsScoDur      db 6 dup(0)     ;; almacenará el temporizador para los bloques positivos
     lvlsColor       db 6 dup(0)     ;; almacena el literal que especifica el color del carro
     charBuffer      db 1            ;; var auxiliar para almacenar un byte
+    wordBuffer      dw 1            ;; var auxiliar para almacenar dos bytes
     ;--------------------------------------------------
     ; Datos del nivel actual
     ;--------------------------------------------------
@@ -778,7 +779,6 @@ carCollision proc near c uses eax ebx edx edi
         cmp ax, bx
         jge _collVertical11
             mov actualScore, 0
-            mov scoreStr, '0'
             mov flag, 0             ;; gg
             jmp _collVertical4
         _collVertical11:
@@ -836,14 +836,36 @@ endGame proc near c
 endGame endp
 
 ;--------------------------------------------------
-saveScores proc near c
+saveScores proc near c uses ecx esi eax
 ; Recupera la información, como el nombre del usuario
 ; puntuación total, segundos jugados y el nivel alcanzado
 ; Escriba esta información al final del archivo de puntuación
 ; USER;SCORE;SECS;LVL
 ;--------------------------------------------------
     openFile scoresFN, fileHandler
-    
+    getFileLength fileHandler                       ;; mueve el puntero hasta el final
+    mov cx, 10
+    xor si, si
+    _1:
+        mov al, userStr[si]
+        cmp al, 32
+        jz _2
+        mov charBuffer, al
+        writeFile fileHandler, charBuffer, 1
+        inc si
+        loop _1
+    _2:
+        mov charBuffer, 59
+        writeFile fileHandler, charBuffer, 1
+        writeFile fileHandler, actualScore, 2       ;; escribe el punteo
+        mov charBuffer, 59
+        writeFile fileHandler, charBuffer, 1
+        writeFile fileHandler, actualTime, 2        ;; escriba los segundos
+        mov charBuffer, 59
+        writeFile fileHandler, charBuffer, 1
+        writeFile fileHandler, actualLevel, 1       ;; escribe el nivel actual
+        mov charBuffer, 10
+        writeFile fileHandler, charBuffer, 1        ;; escriba un salto de linea
     ret
 saveScores endp
 
@@ -1041,13 +1063,15 @@ playGame proc far c uses eax ebx ecx edx esi edi
                 cmp dx, 1                       ;; está pausado
                 jz _playGame0                   ;; regresa al loop principal
                 call carCollision
-                jnz _playGame12
+                jnz _playGame14
         ;--------------------------------------------------
         ; Refresca la pantalla
         ;--------------------------------------------------
             _playGame10:
                 call syncMem              ;; copia el tablero a la mem de video
                 jmp _playGame0
+    _playGame14:
+        call syncMem
     _playGame12:                         ;; game over
         mov al, 2
         mov playState, 2
