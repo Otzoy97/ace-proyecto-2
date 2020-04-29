@@ -33,6 +33,27 @@ passwordTemp    db  80 dup(?)
 ;--------------------------------------------------
 userAdmin       db  "admin", 00 
 passAdmin       db  "1234", 00
+adminOp         db  "  1) Top 10 (punteo)", 0ah, 0dh
+                db  "  2) Top 10 (tiempo)", 0ah, 0dh
+                db  "  3) Salir", 0ah, 0dh, '$'
+scoresFN        db "scores.tzy", 00         ;; archivo que DEBE de existir
+puntosFN        db "puntos.rep", 00         ;; archivo que DEBE de existir
+usrName         db  200 dup(0)              ;; TopScores
+usrName1        db  200 dup(0)              ;; TopTime
+
+usrScore        dw  20  dup(0)              ;; TopScores
+usrScore1       dw  20  dup(0)              ;; Ordenamiento
+usrScore2       dw  20  dup(0)              ;; Referencia
+
+usrLevel        db  20  dup(0)              ;; TopScores
+usrLevel1       db  20  dup(0)              ;; TopTime
+
+usrTime         dw  20  dup(0)              ;; TopTime
+usrTime1        dw  20  dup(0)              ;; Ordenamiento
+usrTime2        dw  20  dup(0)              ;; Referencia
+
+noUsers         dw  ?                       ;; especifica el número de usuario
+2byteNumber     db  0,0,0,0,0,0,'$'         ;; auxiliar para alojar numeros ascii
 ;--------------------------------------------------
 ; USUARIO
 ;--------------------------------------------------
@@ -44,9 +65,6 @@ header          db  " UNIVERSIDAD DE SAN CARLOS DE GUATEMALA", 0ah, 0dh
                 db  " SECCION: A", 0ah, 0ah, 0dh, '$'
 userOp          db  "  1) Iniciar juego", 0ah, 0dh
                 db  "  2) Cargar juego", 0ah, 0dh
-                db  "  3) Salir", 0ah, 0dh, '$'
-adminOp         db  "  1) Top 10 (punteo)", 0ah, 0dh
-                db  "  2) Top 10 (tiempo)", 0ah, 0dh
                 db  "  3) Salir", 0ah, 0dh, '$'
 chooseOp        db  "  Elija una opci", 162,"n : $"
 setFileName     db  "  Escriba el nombre del archivo .ply : $"
@@ -65,49 +83,50 @@ strBuffer       db  80 dup(0)
 userFile        db  "usr.tzy",00
 fileHandler     dw  ?   
 fileBuffChar    db  ? 
+fileBuffWord    dw  ? 
 ;--------------------------------------------------
 .code
 .startup
     mov ax, @data
     mov ds, ax
 main proc near c
-    call loadGameFiles                          ;; carga los archivos del juego
+    call loadGameFiles                                  ;; carga los archivos del juego
     _mainStart:
-        clearScreen                             ;; limpia la pantalla
-        invoke headerMain, 0, 9, offset mainmenu5, 33     ;; imprime en [9][0]
-        printStr offset mainmenu                ;; muestra las opciones disponibles
+        clearScreen                                     ;; limpia la pantalla
+        invoke headerMain, 0, 9, offset mainmenu5, 33   ;; imprime en [9][0]
+        printStr offset mainmenu                        ;; muestra las opciones disponibles
         flushStr strVar, 80, 0
-        getLine strVar                          ;; recupera la opción del usuario
+        getLine strVar                                  ;; recupera la opción del usuario
         compareStr strVar, cte1
-        jz _mainLogin
+        jz _mainLogin                                   ;; iniciar sesión
         compareStr strVar, cte2
-        jz _mainSignup                           
+        jz _mainSignup                                  ;; nuevo usuario
         compareStr strVar, cte3
-        jz _endMain
+        jz _endMain                                     ;; termina el programa
         printStrln offset ln
         printStrln offset wrongOpt
         pauseAnyKey
         jmp _mainStart
     _mainLogin:
         clearScreen
-        invoke headerMain, 0, 9, offset mainmenu6, 33
+        invoke headerMain, 0, 9, offset mainmenu6, 33   ;; imprime un pequeño encabezado
         printStr offset mainmenu1
         flushStr usernameTemp, 10, 0
         flushStr passwordTemp, 10, 0
         getLine usernameTemp
         printStrln offset ln
         printStr offset mainmenu2
-        getLine passwordTemp
+        getLine passwordTemp                            ;; recupera la opción del usuario
         compareStr userAdmin, usernameTemp
-        jnz _mainLoginUsr
-        compareStr userAdmin, usernameTemp
-        jnz _mainLoginUsr
-            ;call mainAdmin
+        jnz _mainLoginUsr                               ;; es igual a 'admin'?
+        compareStr passAdmin, passwordTemp              
+        jnz _mainLoginUsr                               ;; es igual a '1234'?
+            ;call mainAdmin                             ;; ir a modulo administrador
         jmp _mainStart
         _mainLoginUsr:
             call validateLogin
-            .if (ax == 1)                       ;; si es igual a 1, existe el usuario y contraseña
-                call mainUser 
+            .if (ax == 1)                               ;; si es igual a 1, existe el usuario y contraseña
+                call mainUser                           ;; ir a modulo de usuario
             .else
                 printStrln offset ln
                 printStrln offset mainmenu4
@@ -116,16 +135,16 @@ main proc near c
             jmp _mainStart
     _mainSignup:
         clearScreen
-        invoke headerMain,0,9,offset mainmenu7,31
+        invoke headerMain,0,9,offset mainmenu7,31       ;; imprime un encabezado
         printStr offset mainmenu1
         flushStr usernameTemp, 10, 0
         flushStr passwordTemp, 10, 0
-        getLine usernameTemp
+        getLine usernameTemp                            ;; recupera el usuario
         printStrln offset ln
         printStr offset mainmenu2
-        getLine passwordTemp
+        getLine passwordTemp                            ;; recupera la contraseña
         call validateLogin
-        .if (ax == 0)                           ;; usuario no coincide == usuario disponible
+        .if (ax == 0)                                   ;; usuario no coincide == usuario disponible
             call signup
         .else 
             printStrln offset ln
@@ -138,100 +157,6 @@ main proc near c
         mov ax, 4c00h
         int 21h
 main endp
-
-;--------------------------------------------------
-headerMain proc near c uses eax ecx edx, col : byte, row : byte, txtoff : ptr word, sizetxt : word
-; Imprime un encabezado para las primeras pantallas 
-;--------------------------------------------------
-    clearScreen
-    mov ah, 02h
-    xor bx, bx
-    mov dh, row
-    mov dl, col
-    int 10h                 ;; posiciona el cursor
-    mov cx, sizetxt         ;; imprime la parte inicial del borde
-    _headerM1:
-        printChar 205
-        loop _headerM1
-    printStr txtoff         ;; imprime el texto 
-    mov cx, sizetxt         ;; imprime la parte final del borde
-    _headerM2:
-        printChar 205
-        loop _headerM2
-    ret
-headerMain endp
-
-;--------------------------------------------------
-mainUser proc near c
-; Menú principal para el usuario normal
-;-------------------------------------------------- 
-    flushStr userStr, 10, 32
-    mov cx, 10
-    xor si, si
-    _setUserName:
-        mov al, usernameTemp[si]
-        cmp al, 0
-        jz _mainUser1
-        mov userStr[si], al
-        inc si
-        loop _setUserName
-    _mainUser1:
-        clearScreen
-        printStr offset header
-        printStrln offset userOp
-        printStr offset chooseOp
-        flushStr strVar, 80, 0
-        getLine strVar
-        compareStr cte1, strVar
-        jz _mainUser2                           ;; jugar
-        compareStr cte2, strVar
-        jz _mainUser3                           ;; cargar
-        compareStr cte3, strVar
-        jz _mainUser4                           ;; salir
-        printStrln offset ln
-        printStrln offset wrongOpt              ;; opción inválida
-        pauseAnyKey
-        jmp _mainUser1
-    _mainUser2:                                 ;; jugar
-        mov al, gameloaded
-        cmp al, 1
-        jz _mainUser21
-        printStrln offset ln
-        printStrln offset playFailed
-        pauseAnyKey
-        jmp _mainUser1
-        _mainUser21:
-            call initGame
-            call playGame
-        jmp _mainUser1
-    _mainUser3:                                 ;; cargar
-        printStrln offset ln
-        printStr offset setFileName
-        flushStr strVar, 80, 0
-        getLine strVar
-        call validateFile
-        compareStr strBuffer, cte5              ;; compara la extensión
-        jz _mainUser31
-        printStrln offset ln
-        printStrln offset wrongExtFile          ;; extensión inválida
-        pauseAnyKey
-        jmp _mainUser1
-        _mainUser31:
-            openFile strVar, fileHandler        ;; abre el archivo
-            .if (carry?)
-                printStrln offset ln
-                printStrln offset openFileFailed
-            .else
-                push ds
-                invoke loadLine, fileHandler        ;; carga el archivo
-                pop ds
-                closeFile fileHandler               ;; cierra el archivo
-            .endif
-            pauseAnyKey
-            jmp _mainUser1
-    _mainUser4:
-    ret
-mainUser endp
 
 ;--------------------------------------------------
 validateLogin proc near c uses ecx edx esi edi
@@ -370,6 +295,356 @@ validateFile proc near c uses eax ebx ecx edx esi edi
     _validateFile4:
     ret
 validateFile endp
+
+;--------------------------------------------------
+headerMain proc near c uses eax ecx edx, col : byte, row : byte, txtoff : ptr word, sizetxt : word
+; Imprime un encabezado para las primeras pantallas 
+;--------------------------------------------------
+    clearScreen
+    mov ah, 02h
+    xor bx, bx
+    mov dh, row
+    mov dl, col
+    int 10h                 ;; posiciona el cursor
+    mov cx, sizetxt         ;; imprime la parte inicial del borde
+    _headerM1:
+        printChar 205
+        loop _headerM1
+    printStr txtoff         ;; imprime el texto 
+    mov cx, sizetxt         ;; imprime la parte final del borde
+    _headerM2:
+        printChar 205
+        loop _headerM2
+    ret
+headerMain endp
+
+;--------------------------------------------------
+mainUser proc near c
+; Menú principal para el usuario normal
+;-------------------------------------------------- 
+    flushStr userStr, 10, 32
+    mov cx, 10
+    xor si, si
+    _setUserName:
+        mov al, usernameTemp[si]
+        cmp al, 0
+        jz _mainUser1
+        mov userStr[si], al
+        inc si
+        loop _setUserName
+    _mainUser1:
+        clearScreen
+        printStr offset header
+        printStrln offset userOp
+        printStr offset chooseOp
+        flushStr strVar, 80, 0
+        getLine strVar
+        compareStr cte1, strVar
+        jz _mainUser2                           ;; jugar
+        compareStr cte2, strVar
+        jz _mainUser3                           ;; cargar
+        compareStr cte3, strVar
+        jz _mainUser4                           ;; salir
+        printStrln offset ln
+        printStrln offset wrongOpt              ;; opción inválida
+        pauseAnyKey
+        jmp _mainUser1
+    _mainUser2:                                 ;; jugar
+        mov al, gameloaded
+        cmp al, 1
+        jz _mainUser21
+        printStrln offset ln
+        printStrln offset playFailed
+        pauseAnyKey
+        jmp _mainUser1
+        _mainUser21:
+            call initGame
+            call playGame
+        jmp _mainUser1
+    _mainUser3:                                 ;; cargar
+        printStrln offset ln
+        printStr offset setFileName
+        flushStr strVar, 80, 0
+        getLine strVar
+        call validateFile
+        compareStr strBuffer, cte5              ;; compara la extensión
+        jz _mainUser31
+        printStrln offset ln
+        printStrln offset wrongExtFile          ;; extensión inválida
+        pauseAnyKey
+        jmp _mainUser1
+        _mainUser31:
+            openFile strVar, fileHandler        ;; abre el archivo
+            .if (carry?)
+                printStrln offset ln
+                printStrln offset openFileFailed
+            .else
+                push ds
+                invoke loadLine, fileHandler        ;; carga el archivo
+                pop ds
+                closeFile fileHandler               ;; cierra el archivo
+            .endif
+            pauseAnyKey
+            jmp _mainUser1
+    _mainUser4:
+    ret
+mainUser endp
+
+;--------------------------------------------------
+; Convierte un número de 2 bytes a ascii
+toAscii proc near c eax ebx ecx edx , number : word, off : ptr word
+;--------------------------------------------------
+    xor cx, cx
+    xor dx, dx
+    mov ax, number
+    .if (ax == 0)
+        mov bx, off
+        mov [bx], '0'
+    .endif
+    mov bx, 10
+    .while( ax != 0)
+        cwd
+        div bx
+        push dx
+        xor dx, dx
+        inc cx
+    .endw
+    mov bx, off
+    xor si, si
+    .while (cx != 0)
+        pop ax
+        add ax, '0'
+        mov [bx + si], al
+        inc si
+        dec cx
+    .endw
+    ret
+toAscii endp
+
+;--------------------------------------------------
+loadScores proc near c uses eax esi
+; Abre el archivo puntos.rep y carga los punteos a 
+; las variables respectivas
+;--------------------------------------------------
+    local i : word
+    mov i, 0
+    xor si, si
+    flushStr usrName, 200, 0
+    flushStr usrName1, 200, 0
+    flushStr usrScore, 40, 0
+    flushStr usrScore1, 40, 0
+    flushStr usrScore2, 40, 0
+    flushStr usrLevel, 20, 0
+    flushStr usrLevel1, 20, 0
+    flushStr usrLevel2, 20, 0
+    flushStr usrTime, 40, 0
+    flushStr usrTime1, 40, 0
+    flushStr usrTime2, 40, 0
+    openFile scoresFN, fileHandler
+    _getLine1:
+        readFile fileHandler, fileBuffChar, 1               ;; lee un caracter
+        cmp ax, 0                                           ;; se leyó algo?
+        jz _getLine5                                        ;; termina el proceso
+        mov ax, i
+        cmp ax, 20
+        jae _getLine5                                       ;; termina el proceso
+        shl ax, 1                                           ;; i * 2
+        mov si, ax                                          ;; i * 2
+        shl ax, 2                                           ;; i * 2 * 4
+        add si, ax                                          ;; i * 2 + i *8
+        mov al, fileBuffChar
+        mov usrName[si], al
+        mov usrName1[si], al
+        inc si
+        _getLine3:
+            readFile fileHandler, fileBuffChar, 1
+            mov al, fileBuffChar
+            cmp al, 59                                      ;; es igual a punto y coma
+            jz _getLine4
+            mov usrName[si], al
+            mov usrName1[si], al
+            inc si
+            jmp _getLine3
+        _getLine4
+            readFile fileHandler, fileBuffWord, 2
+            mov ax, fileBuffWord
+            mov si, i
+            shl si, 1                                       ;; i * 2
+            mov usrScore[si], ax                            ;; guarda punteo
+            mov usrScore1[si], ax                           ;; guarda punteo
+            mov usrScore2[si], ax                           ;; guarda punteo
+            readFile fileHandler, fileBuffChar, 1           ;; lee un punto y coma
+            readFile fileHandler, fileBuffWord, 2       
+            mov ax, fileBuffWord
+            mov usrTime[si], ax                             ;; guarda segundos
+            mov usrTime1[si], ax                            ;; guarda segundos
+            mov usrTime2[si], ax                            ;; guarda segundos
+            readFile fileHandler, fileBuffChar, 1           ;; lee un punto y coma
+            readFile fileHandler, fileBuffChar, 1
+            mov si, i
+            mov al, fileBuffChar
+            mov usrLevel[si], al                            ;; guarda nivel
+            mov usrLevel1[si], al                            ;; guarda nivel
+            mov usrLevel2[si], al                            ;; guarda nivel
+            readFile fileHandler, fileBuffChar, 1           ;; lee final de línea
+            inc i
+            jmp _getLine1
+    _getLine5:
+        mov ax, i
+        mov noUsers, ax                                     ;; guarda el número de usuarios guardados
+        closeFile fileHandler
+    ret
+loadScores endp
+
+;--------------------------------------------------
+sortTime proc near c uses eax ecx esi edi ebx 
+; Ordena de forma ascendente un arreglo que inicia 
+; en statArr y de tamaño sizeArr
+;--------------------------------------------------
+    xor cx, cx
+    xor si, si
+    mov cx, noUsers                         ;; especifica el tamaño del arreglo
+    dec cx                                  ;; disminiuye el tamaño del arreglo
+    _1bS:
+        push cx                             ;; almacena al contador principal
+        xor si, si                          ;; especifica el inicio del arreglo
+        xor di, di
+    _2bS:
+        mov ax, usrTime[si]
+        mov bh, usrLevel1[di]
+        cmp ax, usrTime[si + 2]             ;; compara el valor actual con el valor siguiente
+        jl _3bS                             ;; si es menor no hace nada
+        xchg ax, usrTime[si + 2]            ;; intercambia los valores
+        xchg bh, usrLevel1[di + 1]
+        mov usrTime[si], ax    
+        mov usrLevel1[di], bh
+        push di
+            mov ax, di
+            shl ax, 2                       ;; ax*4
+            mov di, ax
+            shl ax, 1                       ;; ax*8
+            add di, ax
+            mov ax, di
+            add ax, 10
+            _2bS1:
+                cmp di, ax                  ;; di < ax
+                jae _2bS2
+                mov bl, usrName1[di]
+                push di
+                add di, 10                  ;; di + 10 (siguiente posición)
+                xchg bl, usrName1[di]       ;; intercambia los bytes
+                pop di
+                mov usrName1[di], bl        ;; intercambia los bytes
+                inc di
+                jmp _2bS1
+        _2bS2:
+        pop di
+    _3bS:  
+        add si, 2                           ;; el apuntador avanza
+        inc di
+        loop _2bS
+        pop cx                              ;; reestablece el contador anterior
+        loop _1bS
+    ret 
+sortTime endp
+
+;--------------------------------------------------
+sortScore proc near c uses eax ecx esi edi ebx 
+; Ordena de forma ascendente un arreglo que inicia 
+; en statArr y de tamaño sizeArr
+;--------------------------------------------------
+    xor cx, cx
+    xor si, si
+    mov cx, sizeArr                         ;; especifica el tamaño del arreglo
+    dec cx                                  ;; disminiuye el tamaño del arreglo
+    _1bS:
+        push cx                             ;; almacena al contador principal
+        xor si, si
+        xor di, di
+    _2bS:
+        mov ax, usrScore[si]
+        mov bh, usrLevel[di]
+        cmp ax, usrScore[si + 2]            ;; compara el valor actual con el valor siguiente
+        jl _3bS                             ;; si es menor no hace nada
+        xchg ax, usrScore[si + 2]           ;; intercambia los valores
+        xchg bh, usrLevel[di + 1]
+        mov usrScore[si], ax
+        mov usrLevel[di], bh
+        push di
+            mov ax, di
+            shl ax, 2                       ;; ax*4
+            mov di, ax
+            shl ax, 1                       ;; ax*8
+            add di, ax
+            mov ax, di
+            add ax, 10
+            _2bS1:
+                cmp di, ax                  ;; di < ax
+                jae _2bS2
+                mov bl, usrName1[di]
+                push di
+                add di, 10                  ;; di + 10 (siguiente posición)
+                xchg bl, usrName1[di]       ;; intercambia los bytes
+                pop di
+                mov usrName1[di], bl        ;; intercambia los bytes
+                inc di
+                jmp _2bS1
+        _2bS2:
+        pop di
+    _3bS:  
+        add si, 2                           ;; el apuntador avanza
+        inc di
+        loop _2bS
+        pop cx                              ;; reestablece el contador anterior
+        loop _1bS
+    ret 
+sortScore endp
+
+;--------------------------------------------------
+topScores proc near c
+; 
+;--------------------------------------------------
+    mov ax, noUsers
+    invoke quickSort, offset usrScore, ax                   ;; ordena el arreglo
+    ret
+topScores endp
+
+;-------------------------------------------------- 
+topTime proc near c
+; 
+;--------------------------------------------------
+    ret
+topTime endp
+
+;--------------------------------------------------
+mainAdmin proc near c
+; Menú principal para el usuario administrador
+;--------------------------------------------------
+    call loadScores                                 ;; carga la info de scores.ply
+    _mainAdmin1:
+        clearScreen
+        printStr offset header
+        printStrln offset adminOp
+        printStr offset chooseOp
+        flushStr strVar, 80, 0
+        getLine strVar
+        compareStr cte1, strVar                     ;; top 10 puntos
+        jz _mainAdmin2
+        compareStr cte2, strVar                     ;; top 10 tiempo
+        jz _mainAdmin3
+        compareStr cte3, strVar                     ;; salir
+        jz _mainAdmin4
+        printStrln offset ln
+        printStrln offset wrongOpt
+        pauseAnyKey
+        jmp _mainAdmin1
+    _mainAdmin2:
+        jmp _mainAdmin1
+    _mainAdmin3:
+        jmp _mainAdmin1
+    _mainAdmin4:
+    ret
+mainAdmin endp
 
 end
 

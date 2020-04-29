@@ -18,7 +18,7 @@ include string.asm
     carFN           db "car.otz", 00     ;; archivo que DEBE de existir
     goodFN          db "good.otz", 00    ;; archivo que DEBE de existir
     badFN           db "bad.otz", 00     ;; archivo que DEBE de existir
-    scoresFN        db "puntos.rep", 00   ;; archivo que DEBE de existir
+    scoresFN        db "scores.tzy", 00   ;; archivo que DEBE de existir
     fileHandler     dw ?                 ;; manejador de archivo
     headerG         db " "
     userStr         db "          "
@@ -39,8 +39,7 @@ include string.asm
     lvlsPenDur      db 6 dup(0)     ;; almacenará el temporizador para los bloque negativos
     lvlsScoDur      db 6 dup(0)     ;; almacenará el temporizador para los bloques positivos
     lvlsColor       db 6 dup(0)     ;; almacena el literal que especifica el color del carro
-    charBuffer      db 1            ;; var auxiliar para almacenar un byte
-    wordBuffer      dw 1            ;; var auxiliar para almacenar dos bytes
+    charBuffer      db 1            ;; var auxiliar para almacenar un byte    
     ;--------------------------------------------------
     ; Datos del nivel actual
     ;--------------------------------------------------
@@ -628,9 +627,7 @@ toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
         inc cx
     .endw
     mov bx, toVar
-    .if (cx == 2)
-        mov si, 0
-    .elseif (cx == 1)
+    .if (cx == 1)
         mov si, 1
     .endif
     .while (cx != 0)
@@ -856,14 +853,14 @@ saveScores proc near c uses ecx esi eax
         loop _1
     _2:
         mov charBuffer, 59
-        writeFile fileHandler, charBuffer, 1
+        writeFile fileHandler, charBuffer, 1        ;; escribe un punto y coma
         writeFile fileHandler, actualScore, 2       ;; escribe el punteo
         mov charBuffer, 59
-        writeFile fileHandler, charBuffer, 1
+        writeFile fileHandler, charBuffer, 1        ;; escribe el punto y coma
         writeFile fileHandler, actualTime, 2        ;; escriba los segundos
         mov charBuffer, 59
-        writeFile fileHandler, charBuffer, 1
-        writeFile fileHandler, actualLevel, 1       ;; escribe el nivel actual
+        writeFile fileHandler, charBuffer, 1        ;; escriba el punto y coma
+        writeFile fileHandler, actualLevel, 1       ;; esscribe el nivel
         mov charBuffer, 10
         writeFile fileHandler, charBuffer, 1        ;; escriba un salto de linea
     ret
@@ -1086,6 +1083,7 @@ playGame proc far c uses eax ebx ecx edx esi edi
             cmp ah, 1h                   ;; espera por la tecla ESC
             jnz _playGame13
         call endGame                     ;; termina con el modo video
+        call saveScores                  ;; almacena las variables que alojan tiempo y punteo
     ret
 playGame endp
 
