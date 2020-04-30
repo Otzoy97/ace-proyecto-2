@@ -38,6 +38,7 @@ adminOp         db  "  1) Top 10 (punteo)", 0ah, 0dh
                 db  "  3) Salir", 0ah, 0dh, '$'
 scoresFN        db "scores.tzy", 00         ;; archivo que DEBE de existir
 puntosFN        db "puntos.rep", 00         ;; archivo que DEBE de existir
+tiempoFN        db "tiempos.rep", 00        ;; archivo que DEBE de existir
 usrName         db  200 dup(0)              ;; TopScores
 usrName1        db  200 dup(0)              ;; TopTime
 
@@ -53,7 +54,13 @@ usrTime1        dw  20  dup(0)              ;; Ordenamiento
 usrTime2        dw  20  dup(0)              ;; Referencia
 
 noUsers         dw  ?                       ;; especifica el número de usuario
-2byteNumber     db  0,0,0,0,0,0,'$'         ;; auxiliar para alojar numeros ascii
+byte2Number     db  0,0,0,0,0,0,'$'         ;; auxiliar para alojar numeros ascii
+
+topScoreHeader  db  186,"                                TOP 10  PUNTOS                                ",186
+topTimesHeader  db  186,"                                TOP 10 TIEMPOS                                ",186
+lateral1        db  186,"                     "
+lateral2        db  "                     ",186
+NoData          db  "  No hay datos para mostrar$"
 ;--------------------------------------------------
 ; USUARIO
 ;--------------------------------------------------
@@ -121,7 +128,7 @@ main proc near c
         jnz _mainLoginUsr                               ;; es igual a 'admin'?
         compareStr passAdmin, passwordTemp              
         jnz _mainLoginUsr                               ;; es igual a '1234'?
-            ;call mainAdmin                             ;; ir a modulo administrador
+            call mainAdmin                             ;; ir a modulo administrador
         jmp _mainStart
         _mainLoginUsr:
             call validateLogin
@@ -392,14 +399,15 @@ mainUser endp
 
 ;--------------------------------------------------
 ; Convierte un número de 2 bytes a ascii
-toAscii proc near c eax ebx ecx edx , number : word, off : ptr word
+toAscii proc near c uses eax ebx ecx edx , number : word, off : ptr word
 ;--------------------------------------------------
     xor cx, cx
     xor dx, dx
     mov ax, number
     .if (ax == 0)
         mov bx, off
-        mov [bx], '0'
+        mov al, '0'
+        mov [bx], al
     .endif
     mov bx, 10
     .while( ax != 0)
@@ -436,11 +444,11 @@ loadScores proc near c uses eax esi
     flushStr usrScore2, 40, 0
     flushStr usrLevel, 20, 0
     flushStr usrLevel1, 20, 0
-    flushStr usrLevel2, 20, 0
     flushStr usrTime, 40, 0
     flushStr usrTime1, 40, 0
     flushStr usrTime2, 40, 0
     openFile scoresFN, fileHandler
+    jc _getLine6
     _getLine1:
         readFile fileHandler, fileBuffChar, 1               ;; lee un caracter
         cmp ax, 0                                           ;; se leyó algo?
@@ -465,7 +473,7 @@ loadScores proc near c uses eax esi
             mov usrName1[si], al
             inc si
             jmp _getLine3
-        _getLine4
+        _getLine4:
             readFile fileHandler, fileBuffWord, 2
             mov ax, fileBuffWord
             mov si, i
@@ -484,8 +492,7 @@ loadScores proc near c uses eax esi
             mov si, i
             mov al, fileBuffChar
             mov usrLevel[si], al                            ;; guarda nivel
-            mov usrLevel1[si], al                            ;; guarda nivel
-            mov usrLevel2[si], al                            ;; guarda nivel
+            mov usrLevel1[si], al                           ;; guarda nivel
             readFile fileHandler, fileBuffChar, 1           ;; lee final de línea
             inc i
             jmp _getLine1
@@ -493,6 +500,9 @@ loadScores proc near c uses eax esi
         mov ax, i
         mov noUsers, ax                                     ;; guarda el número de usuarios guardados
         closeFile fileHandler
+        ret
+    _getLine6:
+    pauseAnyKey
     ret
 loadScores endp
 
@@ -505,6 +515,9 @@ sortTime proc near c uses eax ecx esi edi ebx
     xor si, si
     mov cx, noUsers                         ;; especifica el tamaño del arreglo
     dec cx                                  ;; disminiuye el tamaño del arreglo
+    .if (cx == 0)
+        jmp _4bS
+    .endif
     _1bS:
         push cx                             ;; almacena al contador principal
         xor si, si                          ;; especifica el inicio del arreglo
@@ -520,9 +533,9 @@ sortTime proc near c uses eax ecx esi edi ebx
         mov usrLevel1[di], bh
         push di
             mov ax, di
-            shl ax, 2                       ;; ax*4
+            shl ax, 1                       ;; ax*2
             mov di, ax
-            shl ax, 1                       ;; ax*8
+            shl ax, 2                       ;; ax*8
             add di, ax
             mov ax, di
             add ax, 10
@@ -545,6 +558,7 @@ sortTime proc near c uses eax ecx esi edi ebx
         loop _2bS
         pop cx                              ;; reestablece el contador anterior
         loop _1bS
+    _4bS:
     ret 
 sortTime endp
 
@@ -555,8 +569,11 @@ sortScore proc near c uses eax ecx esi edi ebx
 ;--------------------------------------------------
     xor cx, cx
     xor si, si
-    mov cx, sizeArr                         ;; especifica el tamaño del arreglo
+    mov cx, noUsers                         ;; especifica el tamaño del arreglo
     dec cx                                  ;; disminiuye el tamaño del arreglo
+    .if (cx == 0)
+        jmp _4bS
+    .endif
     _1bS:
         push cx                             ;; almacena al contador principal
         xor si, si
@@ -572,21 +589,21 @@ sortScore proc near c uses eax ecx esi edi ebx
         mov usrLevel[di], bh
         push di
             mov ax, di
-            shl ax, 2                       ;; ax*4
+            shl ax, 1                       ;; ax*2
             mov di, ax
-            shl ax, 1                       ;; ax*8
+            shl ax, 2                       ;; ax*8
             add di, ax
             mov ax, di
             add ax, 10
             _2bS1:
                 cmp di, ax                  ;; di < ax
                 jae _2bS2
-                mov bl, usrName1[di]
+                mov bl, usrName[di]
                 push di
                 add di, 10                  ;; di + 10 (siguiente posición)
-                xchg bl, usrName1[di]       ;; intercambia los bytes
+                xchg bl, usrName[di]       ;; intercambia los bytes
                 pop di
-                mov usrName1[di], bl        ;; intercambia los bytes
+                mov usrName[di], bl        ;; intercambia los bytes
                 inc di
                 jmp _2bS1
         _2bS2:
@@ -597,30 +614,284 @@ sortScore proc near c uses eax ecx esi edi ebx
         loop _2bS
         pop cx                              ;; reestablece el contador anterior
         loop _1bS
+    _4bS:
     ret 
 sortScore endp
 
 ;--------------------------------------------------
-topScores proc near c
-; 
+topScores proc near c uses eax ecx edi
+; Imprime el top 10 de puntos
 ;--------------------------------------------------
+    local i : word, noUsersTemp : word
+    mov i, 1
     mov ax, noUsers
-    invoke quickSort, offset usrScore, ax                   ;; ordena el arreglo
+    mov noUsersTemp, ax
+    createFile puntosFN, fileHandler
+    mov al, 201
+    mov fileBuffChar, al                                ;; empieza a formar un marco
+    writeFile fileHandler, fileBuffChar, 1
+    add al, 4
+    mov fileBuffChar, al
+    mov cx, 78
+    _topScores1:
+        writeFile fileHandler, fileBuffChar, 1
+        loop _topScores1
+    mov al, 187
+    mov fileBuffChar, al
+    writeFile fileHandler, fileBuffChar, 1
+    mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
+    writeFile fileHandler, fileBuffChar, 1
+    writeFile fileHandler, topScoreHeader, 80
+    mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
+    writeFile fileHandler, fileBuffChar, 1
+    _topScores2:
+        cmp noUsersTemp, 0
+        jle _topScores8
+        cmp i, 10
+        jg _topScores8
+        writeFile fileHandler, lateral1, 22
+        invoke toAscii, noUsersTemp, offset byte2Number
+        .if (noUsersTemp < 10)
+            writeFile fileHandler, byte2Number, 1
+            mov cx, 7
+        .else
+            writeFile fileHandler, byte2Number, 2
+            mov cx, 6
+        .endif
+        mov al, '.'
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1          ;; escribe un lateral
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores3:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 6 o 7 espacios
+            loop _topScores3
+        mov ax, i
+        dec ax
+        shl ax, 1                                       ;; i * 2
+        mov di, ax
+        shl ax, 2                                       ;; i * 8
+        add di, ax
+        mov cx, 10
+        _topScores4:
+            mov al, usrName[di]
+            .if (al == 0)
+                mov al, 32
+            .endif
+            mov fileBuffChar, al
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe el nombre
+            inc di
+            loop _topScores4
+        mov cx, 5
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores5:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 5 espacios
+            loop _topScores5
+        mov ax, i
+        dec ax
+        mov di, ax
+        movzx ax, usrLevel[di]
+        invoke toAscii, ax, offset byte2Number
+        writeFile fileHandler, byte2Number, 1           ;; escribe el nivel
+        mov cx, 5
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores6:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 5 espacios
+            loop _topScores6
+        flushStr byte2Number, 6, 0
+        mov ax, i
+        dec ax
+        shl ax, 1                                       ;; lo multiplica por 2
+        mov di, ax
+        mov ax, usrScore[di]
+        invoke toAscii, ax, offset byte2Number
+        xor di, di
+        mov cx, 6
+        _topScores7:
+            mov al, byte2Number[di]
+            .if (al == 0)
+                mov al, 32
+            .endif
+            mov fileBuffChar, al
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe el punteo
+            inc di
+            loop _topScores7
+        writeFile fileHandler, lateral2, 22
+        mov fileBuffChar, 0ah                           ;; termina la parte sup del marco
+        writeFile fileHandler, fileBuffChar, 1
+        inc i
+        dec noUsersTemp
+        jmp _topScores2
+    _topScores8:
+        mov al, 200
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        mov al, 205
+        mov fileBuffChar, al
+        mov cx, 78
+        _topScores9:
+            writeFile fileHandler, fileBuffChar, 1
+            loop _topScores9
+        mov al, 188
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        closeFile fileHandler
     ret
 topScores endp
 
 ;-------------------------------------------------- 
 topTime proc near c
-; 
+; Imprime el top 10 tiempos
 ;--------------------------------------------------
+    local i : word, noUsersTemp : word
+    mov i, 1
+    mov ax, noUsers
+    mov noUsersTemp, ax
+    createFile tiempoFN, fileHandler
+    mov al, 201
+    mov fileBuffChar, al                                ;; empieza a formar un marco
+    writeFile fileHandler, fileBuffChar, 1
+    add al, 4
+    mov fileBuffChar, al
+    mov cx, 78
+    _topScores1:
+        writeFile fileHandler, fileBuffChar, 1
+        loop _topScores1
+    mov al, 187
+    mov fileBuffChar, al
+    writeFile fileHandler, fileBuffChar, 1
+    mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
+    writeFile fileHandler, fileBuffChar, 1
+    writeFile fileHandler, topTimesHeader, 80
+    mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
+    writeFile fileHandler, fileBuffChar, 1
+    _topScores2:
+        cmp noUsersTemp, 0
+        jle _topScores8
+        cmp i, 10
+        jg _topScores8
+        writeFile fileHandler, lateral1, 22
+        invoke toAscii, noUsersTemp, offset byte2Number
+        .if (i < 10)
+            writeFile fileHandler, byte2Number, 1
+            mov cx, 7
+        .else
+            writeFile fileHandler, byte2Number, 2
+            mov cx, 6
+        .endif
+        mov al, '.'
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1          ;; escribe un lateral
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores3:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 6 o 7 espacios
+            loop _topScores3
+        mov ax, i
+        dec ax
+        shl ax, 1                                       ;; i * 2
+        mov di, ax
+        shl ax, 2                                       ;; i * 8
+        add di, ax
+        mov cx, 10
+        _topScores4:
+            mov al, usrName1[di]
+            .if (al == 0)
+                mov al, 32
+            .endif
+            mov fileBuffChar, al
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe el nombre
+            inc di
+            loop _topScores4
+        mov cx, 5
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores5:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 5 espacios
+            loop _topScores5
+        mov ax, i
+        dec ax
+        mov di, ax
+        movzx ax, usrLevel1[di]
+        invoke toAscii, ax, offset byte2Number
+        writeFile fileHandler, byte2Number, 1           ;; escribe el nivel
+        mov cx, 5
+        mov al, 32
+        mov fileBuffChar, al
+        _topScores6:
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe 5 espacios
+            loop _topScores6
+        flushStr byte2Number, 6, 0
+        mov ax, i
+        dec ax
+        shl ax, 1                                       ;; lo multiplica por 2
+        mov di, ax
+        mov ax, usrTime[di]
+        invoke toAscii, ax, offset byte2Number
+        xor di, di
+        mov cx, 6
+        _topScores7:
+            mov al, byte2Number[di]
+            .if (al == 0)
+                mov al, 32
+            .endif
+            mov fileBuffChar, al
+            writeFile fileHandler, fileBuffChar, 1      ;; escribe el punteo
+            inc di
+            loop _topScores7
+        writeFile fileHandler, lateral2, 22
+        mov fileBuffChar, 0ah                           ;; termina la parte sup del marco
+        writeFile fileHandler, fileBuffChar, 1
+        inc i
+        dec noUsersTemp
+        jmp _topScores2
+    _topScores8:
+        mov al, 200
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        mov al, 205
+        mov fileBuffChar, al
+        mov cx, 78
+        _topScores9:
+            writeFile fileHandler, fileBuffChar, 1
+            loop _topScores9
+        mov al, 188
+        mov fileBuffChar, al
+        writeFile fileHandler, fileBuffChar, 1
+        closeFile fileHandler
     ret
 topTime endp
+
+;--------------------------------------------------
+printRep proc near c uses eax ebx ecx edx esi edi, opt : word
+; 0 - PUNTOS
+; 1 - TIEMPOS
+;--------------------------------------------------
+    cmp opt, 1
+    jz _printRep0
+    openFile puntosFN, fileHandler
+    jmp _printRep1
+    _printRep0:
+    openFile tiempoFN, fileHandler
+    _printRep1:
+        readFile fileHandler, fileBuffChar, 1
+        cmp ax, 0
+        jz _printRep2
+        printChar fileBuffChar
+        jmp _printRep1
+    _printRep2:
+    ret
+printRep endp
 
 ;--------------------------------------------------
 mainAdmin proc near c
 ; Menú principal para el usuario administrador
 ;--------------------------------------------------
     call loadScores                                 ;; carga la info de scores.ply
+    call sortTime                                   ;; ordena la info para el top 10 de tiempo
+    call sortScore                                  ;; ordena la info para el top 10 de puntos
     _mainAdmin1:
         clearScreen
         printStr offset header
@@ -639,8 +910,33 @@ mainAdmin proc near c
         pauseAnyKey
         jmp _mainAdmin1
     _mainAdmin2:
+        mov ax, noUsers
+        cmp ax, 0
+        jz _mainAdmin21
+        call topScores
+        clearScreen
+        invoke printRep, 0
+        pauseAnyKey
+        jmp _mainAdmin22
+        _mainAdmin21:
+            printStrln offset ln
+            printStrln offset NoData
+            pauseAnyKey
+        _mainAdmin22:
         jmp _mainAdmin1
     _mainAdmin3:
+        mov ax, noUsers
+        cmp ax, 0
+        jz _mainAdmin31
+        call topTime
+        clearScreen
+        invoke printRep, 1
+        pauseAnyKey
+        jmp _mainAdmin32
+        _mainAdmin31:
+            printStrln offset ln
+            printStrln offset NoData
+        _mainAdmin32:
         jmp _mainAdmin1
     _mainAdmin4:
     ret

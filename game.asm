@@ -863,6 +863,7 @@ saveScores proc near c uses ecx esi eax
         writeFile fileHandler, actualLevel, 1       ;; esscribe el nivel
         mov charBuffer, 10
         writeFile fileHandler, charBuffer, 1        ;; escriba un salto de linea
+        closeFile fileHandler
     ret
 saveScores endp
 
