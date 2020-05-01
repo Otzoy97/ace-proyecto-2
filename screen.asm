@@ -14,3 +14,16 @@ pauseAnyKey macro
     pop ax
 endm
 
+pauseSpaceKey macro
+    local _pause1
+    push ax
+    _pause1:
+        mov ah, 01h
+        int 16h
+        jz _pause1
+        mov ah, 00h
+        int 16h
+        cmp ah, 39h
+        jnz _pause1
+    pop ax
+endm
