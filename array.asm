@@ -4,7 +4,126 @@
 include p2lib.inc
 include string.asm
 .data
+    blockWidth      dw      ?               ;; ancho del bloque
+    maxHeigth       dw      ?               ;; valor máximo
+    padding         dw      ?               ;; espacio entre bloques
+    startPad        dw      ?               ;; offset al inicio
+    col             dw      ?               ;; indica la columa en la que se debe pintar
+    tempDWord       dd      ?
+    vram            dw      ?
+    ;--------------------------------------------------
+    ; Tiempo
+    ;--------------------------------------------------
+    headerSort      db      "ORD: "
+    nameSort        db      "          "
+                    db      "    TMP:  "
+    minuG           db      "00:"
+    segsG           db      "00"
+                    db      "    VEL: "
+    veloG           db      " "
+    quickName       db      "QUICKSORT",0
+    bubleName       db      "BUBBLESORT",0
+    shellName       db      "SHELSORT",0
+    numberChar      db      2 dup(0)
 .code
+
+;--------------------------------------------------
+cleanVram proc far c uses eax ebx ecx edx esi esi
+; Limpia la memoria de doble buffer
+;--------------------------------------------------
+    mov dx, vram
+    mov es, dx
+    xor di, di
+    xor eax, eax
+    mov cx, 14080                   ;; (176 * 320) / 4
+    cld 
+    rep stosd
+    ret
+cleanVram endp
+
+;--------------------------------------------------
+initArray proc far c uses eax ebx ecx edx, maxValue : word, sizeArr : word
+; Calcula el grosor de los bloques, el espaciado entre los bloques
+; el alto de los bloques
+;--------------------------------------------------
+    mov ah, 48h
+    mov bx, 3520                    ;; (176 * 320) / 16
+    int 21h
+    mov vram, ax                    ;; indica la pos de mem
+    mov ax, maxValue
+    mov maxHeigth, ax               ;; indica el valor máximo
+    mov ax, 40
+    mov bx, sizeArr
+    cmp bx, 1
+    jz _initArray1
+    cwd
+    div bx
+    mov startPad, ax                ;; indica el espacio al inicio
+    mov ax, 220
+    cwd
+    div bx
+    mov blockWidth, ax              ;; indica el ancho de las barras
+    mov ax, 76
+    dec bx 
+    cwd 
+    div bx
+    mov padding, ax                 ;; indica el espacio entre barras
+    jmp _initArray2
+    _initArray1:
+        mov blockWidth, 240
+        mov padding, 0
+        mov startPad, 40
+    _initArray2:
+    ret
+initArray endp
+
+;--------------------------------------------------
+detColor proc near c, value : word
+; Devuelve en al el byte que representa el color con el 
+; que se pintará un bloque
+;--------------------------------------------------
+    mov ax, value
+    cmp ax, 20                      ;; hasta 20 
+    jg _detColor1
+        mov al, 40                  ;; color rojo
+    jmp _detColor5
+    _detColor1:
+    cmp ax, 40                      ;; hasta 40
+    jg _detColor2
+        mov al, 1                   ;; color azul
+    _detColor2:
+    cmp ax, 60                      ;; hasta 60
+    jg _detColor3
+        mov al, 44                  ;; color amarillo
+    _detColor3:
+    cmp ax, 80                      ;; hasta 80
+    jg _detColor4
+        mov al, 3                   ;; color verde
+    _detColor4:                     ;; desde 81 en adelante
+        mov al, 15                  ;; color blanco
+    _detColor5:
+    ret
+detcolor endp
+
+;--------------------------------------------------
+printBlock proc far c uses eax ebx ecx edx, value : word
+;--------------------------------------------------
+    mov bx, value
+    shl ebx, 4                      ;; x16
+    mov eax, ebx
+    shl ebx, 1                      ;; x32
+    add eax, ebx
+    shl ebx, 2                      ;; x128
+    add eax, ebx
+    mov tempDWord, eax
+    mov ax, word ptr tempDWord[0]
+    mov dx, word ptr tempDWord[2]
+    mov bx, maxHeigth
+    div bx                          ;; z*176/maxHeigth
+
+    ret
+printBlock endp
+
 ;--------------------------------------------------
 bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
 ; Ordena de forma ascendente un arreglo que inicia 
