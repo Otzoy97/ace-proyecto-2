@@ -76,12 +76,16 @@ detcolor endp
 
 ;--------------------------------------------------
 printBlock proc far c uses eax ebx ecx edx, value : word, startCol : word
+;
 ;--------------------------------------------------
-    local ratioAspect : word
+    local startRow : word, i : word, colorl : byte
+    mov startRow, 168
+    mov i, 0
+    xor ebx, ebx
     mov bx, value
-    shl ebx, 4                      ;; x16
+    shl ebx, 3                      ;; x8
     mov eax, ebx
-    shl ebx, 1                      ;; x32
+    shl ebx, 2                      ;; x32
     add eax, ebx
     shl ebx, 2                      ;; x128
     add eax, ebx
@@ -89,10 +93,40 @@ printBlock proc far c uses eax ebx ecx edx, value : word, startCol : word
     mov ax, word ptr tempDWord[0]
     mov dx, word ptr tempDWord[2]
     mov bx, maxHeigth
-    div bx                          ;; z*176/maxHeigth
-    mov ratioAspect, ax             ;; almacena el número de pixeles a pintar
-    invoke detColor, word           ;; determina el color de los pixeles
-    
+    div bx                          ;; z*168/maxHeigth
+    mov i, ax
+    dec i
+    sub startRow, ax                ;; determina el offset para empezar a pintar
+    mov ax, startRow
+    shl ax, 6                       ;; x64
+    mov bx, ax
+    shl ax, 2                       ;; x256
+    add bx, ax
+    mov startRow, bx                ;; starRow * 320
+    invoke detColor, value          ;; determina el color de los pixeles
+    mov colorl, al
+    mov dx, vram 
+    mov es, dx
+    _printBlock1:
+        cmp i, 0                   ;; se sale cuando sea igual
+        jle _printBlock2
+        mov ax, i
+        shl ax, 6                   ;; x64
+        mov di, ax
+        shl ax, 2
+        add di, ax                  ;; x256
+        add di, startRow
+        add di, col
+        mov al, colorl
+        mov cx, blockWidth
+        rep stosb
+        dec i
+        jmp _printBlock1
+    _printBlock2:
+        mov ax, blockWidth
+        add col, ax
+        mov ax, padding
+        add col, ax
     ret
 printBlock endp
 
@@ -104,7 +138,7 @@ cleanVram proc near c uses eax ebx ecx edx esi esi
     mov es, dx
     xor di, di
     xor eax, eax
-    mov cx, 14080                   ;; (176 * 320) / 4
+    mov cx, 13440                   ;; (168 * 320) / 4
     cld 
     rep stosd
     ret
@@ -115,7 +149,7 @@ startVideo proc near c eax ebx
 ; Inicia el modo video e inicializa la memoria reservada
 ;--------------------------------------------------
     mov ah, 48h
-    mov bx, 3520                        ;; (176 * 320) / 16
+    mov bx, 3360                        ;; (168 * 320) / 16
     int 21h
     mov vram, ax                        ;; indica la pos de mem
     call cleanVram
@@ -128,12 +162,11 @@ startVideo endp
 ;--------------------------------------------------
 showUnsorted proc far c uses eax ebx ecx edx esi edi
 ;--------------------------------------------------
-    local local_col : word
     mov ah, 00h
     mov al, 13h
     int 10h                             ;; inicia el modo video
     mov ax, startPad
-    mov local_col, startPad             ;; inicializa local_col
+    mov col, ax                         ;; inicializa local_col
 
     ret
 showUnsorted endp
