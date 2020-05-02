@@ -401,7 +401,7 @@ mainUser endp
 
 ;--------------------------------------------------
 ; Convierte un número de 2 bytes a ascii
-toAscii proc near c uses eax ebx ecx edx , number : word, off : ptr word
+toAsciiP2 proc near c uses eax ebx ecx edx , number : word, off : ptr word
 ;--------------------------------------------------
     xor cx, cx
     xor dx, dx
@@ -429,7 +429,7 @@ toAscii proc near c uses eax ebx ecx edx , number : word, off : ptr word
         dec cx
     .endw
     ret
-toAscii endp
+toAsciiP2 endp
 
 ;--------------------------------------------------
 loadScores proc near c uses eax esi
@@ -645,7 +645,7 @@ topScores proc near c uses eax ecx edi
         cmp i, 0
         je _topScores8
         writeFile fileHandler, lateral1, 22
-        invoke toAscii, noUsersTemp, offset byte2Number
+        invoke toAsciiP2, noUsersTemp, offset byte2Number
         .if (noUsersTemp < 10)
             writeFile fileHandler, byte2Number, 1
             mov cx, 7
@@ -687,7 +687,7 @@ topScores proc near c uses eax ecx edi
         dec ax
         mov di, ax
         movzx ax, usrLevel[di]
-        invoke toAscii, ax, offset byte2Number
+        invoke toAsciiP2, ax, offset byte2Number
         writeFile fileHandler, byte2Number, 1           ;; escribe el nivel
         mov cx, 5
         mov al, 32
@@ -701,7 +701,7 @@ topScores proc near c uses eax ecx edi
         shl ax, 1                                       ;; lo multiplica por 2
         mov di, ax
         mov ax, usrScore[di]
-        invoke toAscii, ax, offset byte2Number
+        invoke toAsciiP2, ax, offset byte2Number
         xor di, di
         mov cx, 6
         _topScores7:
@@ -749,7 +749,7 @@ topTime proc near c uses eax ebx ecx edx esi edi
         cmp i, 0
         je _topScores8
         writeFile fileHandler, lateral1, 22
-        invoke toAscii, noUsersTemp, offset byte2Number
+        invoke toAsciiP2, noUsersTemp, offset byte2Number
         .if (noUsersTemp < 10)
             writeFile fileHandler, byte2Number, 1
             mov cx, 7
@@ -791,7 +791,7 @@ topTime proc near c uses eax ebx ecx edx esi edi
         dec ax
         mov di, ax
         movzx ax, usrLevel1[di]
-        invoke toAscii, ax, offset byte2Number
+        invoke toAsciiP2, ax, offset byte2Number
         writeFile fileHandler, byte2Number, 1           ;; escribe el nivel
         mov cx, 5
         mov al, 32
@@ -805,7 +805,7 @@ topTime proc near c uses eax ebx ecx edx esi edi
         shl ax, 1                                       ;; lo multiplica por 2
         mov di, ax
         mov ax, usrTime[di]
-        invoke toAscii, ax, offset byte2Number
+        invoke toAsciiP2, ax, offset byte2Number
         xor di, di
         mov cx, 6
         _topScores7:
@@ -909,24 +909,25 @@ mainAdmin proc near c
 mainAdmin endp
 
 ;--------------------------------------------------
-; resetArray proc near c uses eax ebx ecx esi edi
+resetArray proc near c uses eax ebx ecx esi edi
 ; Utiliza los array de referencia y los copia en los 
 ; array se utilizan para los ordenamientos
 ;--------------------------------------------------
-;     local i : word
-;     mov i, 0
-;     xor si, si
-;     xor di, di
-;     _resetArray1:
-;         cmp i, 20
-;         jge _resetArray
-;         mov ax, usrScore2[si]
-;         mov usrScore1[si], ax                       ;; reestablece el arreglo
-;         mov ax, usrTime2[si]
-;         mov usrTime1[si], ax                        ;; reestablece el arreglo
-;         add si, 2
-;     ret
-; resetArray endp
+    local i : word
+    mov i, 0
+    xor si, si
+    xor di, di
+    _resetArray1:
+        cmp i, 20
+        jge _resetArray2
+        mov ax, usrScore2[si]
+        mov usrScore1[si], ax                       ;; reestablece el arreglo
+        mov ax, usrTime2[si]
+        mov usrTime1[si], ax                        ;; reestablece el arreglo
+        add si, 2
+    _resetArray2:
+    ret
+resetArray endp
 
 ;startSort proc near c uses
 

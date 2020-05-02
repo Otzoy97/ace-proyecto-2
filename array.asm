@@ -11,6 +11,26 @@ include string.asm
     col             dw      ?               ;; indica la columa en la que se debe pintar
     tempDWord       dd      ?
     vram            dw      ?
+    sense           dw      ?               ;; ascendente = 0 descedente = 1
+    velocity        dw      ?               ;; [0-9]
+    veloStr0        db      "  Ordenamientos disponibles:",0ah, 0dh
+                    db      "  (1) Ordenamiento por Bubblesort",0ah, 0dh
+                    db      "  (2) Ordenamiento por Quicksort",0ah, 0dh
+                    db      "  (3) Ordenamiento por Shellsort",0ah, 0dh,0ah, 0dh
+                    db      "  Elija una opci", 162,"n : $"
+    veloStr         db      "  Ingrese la velocidad del ordenamiento [0,9]: $"
+    chooseOrd       dw      ?               ;; bubble = 0 ; quick = 1 ; shell = 2
+    lineVar         db      50 dup(0)
+    chooseOp0       db      "0$"
+    chooseOp1       db      "1$"
+    chooseOp2       db      "2$"
+    chooseOp3       db      "3$"
+    chooseOp4       db      "4$"
+    chooseOp5       db      "5$"
+    chooseOp6       db      "6$"
+    chooseOp7       db      "7$"
+    chooseOp8       db      "8$"
+    chooseOp9       db      "9$"
     ;--------------------------------------------------
     ; Tiempo
     ;--------------------------------------------------
@@ -26,57 +46,6 @@ include string.asm
     shellName       db      "SHELSORT",0
     numberChar      db      2 dup(0)
 .code
-
-;--------------------------------------------------
-cleanVram proc far c uses eax ebx ecx edx esi esi
-; Limpia la memoria de doble buffer
-;--------------------------------------------------
-    mov dx, vram
-    mov es, dx
-    xor di, di
-    xor eax, eax
-    mov cx, 14080                   ;; (176 * 320) / 4
-    cld 
-    rep stosd
-    ret
-cleanVram endp
-
-;--------------------------------------------------
-initArray proc far c uses eax ebx ecx edx, maxValue : word, sizeArr : word
-; Calcula el grosor de los bloques, el espaciado entre los bloques
-; el alto de los bloques
-;--------------------------------------------------
-    mov ah, 48h
-    mov bx, 3520                    ;; (176 * 320) / 16
-    int 21h
-    mov vram, ax                    ;; indica la pos de mem
-    mov ax, maxValue
-    mov maxHeigth, ax               ;; indica el valor máximo
-    mov ax, 40
-    mov bx, sizeArr
-    cmp bx, 1
-    jz _initArray1
-    cwd
-    div bx
-    mov startPad, ax                ;; indica el espacio al inicio
-    mov ax, 220
-    cwd
-    div bx
-    mov blockWidth, ax              ;; indica el ancho de las barras
-    mov ax, 76
-    dec bx 
-    cwd 
-    div bx
-    mov padding, ax                 ;; indica el espacio entre barras
-    jmp _initArray2
-    _initArray1:
-        mov blockWidth, 240
-        mov padding, 0
-        mov startPad, 40
-    _initArray2:
-    ret
-initArray endp
-
 ;--------------------------------------------------
 detColor proc near c, value : word
 ; Devuelve en al el byte que representa el color con el 
@@ -106,8 +75,9 @@ detColor proc near c, value : word
 detcolor endp
 
 ;--------------------------------------------------
-printBlock proc far c uses eax ebx ecx edx, value : word
+printBlock proc far c uses eax ebx ecx edx, value : word, startCol : word
 ;--------------------------------------------------
+    local ratioAspect : word
     mov bx, value
     shl ebx, 4                      ;; x16
     mov eax, ebx
@@ -120,9 +90,97 @@ printBlock proc far c uses eax ebx ecx edx, value : word
     mov dx, word ptr tempDWord[2]
     mov bx, maxHeigth
     div bx                          ;; z*176/maxHeigth
-
+    mov ratioAspect, ax             ;; almacena el número de pixeles a pintar
+    invoke detColor, word           ;; determina el color de los pixeles
+    
     ret
 printBlock endp
+
+;--------------------------------------------------
+cleanVram proc near c uses eax ebx ecx edx esi esi
+; Limpia la memoria de doble buffer
+;--------------------------------------------------
+    mov dx, vram
+    mov es, dx
+    xor di, di
+    xor eax, eax
+    mov cx, 14080                   ;; (176 * 320) / 4
+    cld 
+    rep stosd
+    ret
+cleanVram endp
+
+;--------------------------------------------------
+startVideo proc near c eax ebx
+; Inicia el modo video e inicializa la memoria reservada
+;--------------------------------------------------
+    mov ah, 48h
+    mov bx, 3520                        ;; (176 * 320) / 16
+    int 21h
+    mov vram, ax                        ;; indica la pos de mem
+    call cleanVram
+    mov ah, 00h
+    mov al, 13h
+    int 10h
+    ret
+startVideo endp 
+
+;--------------------------------------------------
+showUnsorted proc far c uses eax ebx ecx edx esi edi
+;--------------------------------------------------
+    local local_col : word
+    mov ah, 00h
+    mov al, 13h
+    int 10h                             ;; inicia el modo video
+    mov ax, startPad
+    mov local_col, startPad             ;; inicializa local_col
+
+    ret
+showUnsorted endp
+
+;--------------------------------------------------
+initArray proc far c uses eax ebx ecx edx, arraytype : word
+; Calcula el grosor de los bloques, el espaciado entre los bloques
+; y el alto de los bloques
+; arrayType = 0 -> Score
+; arrayType = 1 -> Times
+;--------------------------------------------------
+    mov di, noUsers
+    dec di                              ;; recupera un indice válido
+    shl di, 1                           ;; multiplica por 2
+    mov ax, arraytype
+    cmp ax, 0
+    jnz _initArray1
+        mov ax, word ptr usrScore1[di]  ;; recupera el valor más grande
+        jmp _initArray2
+    _initArray1:
+        mov ax, word ptr usrTime1[di]   ;; recupera el valor más grande
+    _initArray2:
+        mov maxHeigth, ax               ;; indica el valor máximo
+    mov ax, 40
+    mov bx, noUsers
+    cmp bx, 1
+    jz _initArray3
+        cwd
+        div bx
+        mov startPad, ax                ;; indica el espacio al inicio
+        mov ax, 220
+        cwd
+        div bx
+        mov blockWidth, ax              ;; indica el ancho de las barras
+        mov ax, 76
+        dec bx 
+        cwd 
+        div bx
+        mov padding, ax                 ;; indica el espacio entre barras
+        jmp _initArray4
+    _initArray3:
+        mov blockWidth, 240
+        mov padding, 0
+        mov startPad, 40
+    _initArray4:
+    ret
+initArray endp
 
 ;--------------------------------------------------
 bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
