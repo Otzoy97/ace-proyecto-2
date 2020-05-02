@@ -56,11 +56,13 @@ usrTime2        dw  20  dup(0)              ;; Referencia
 noUsers         dw  ?                       ;; especifica el número de usuario
 byte2Number     db  0,0,0,0,0,0,'$'         ;; auxiliar para alojar numeros ascii
 
-topScoreHeader  db  186,"                                TOP 10  PUNTOS                                ",186
-topTimesHeader  db  186,"                                TOP 10 TIEMPOS                                ",186
-lateral1        db  186,"                     "
-lateral2        db  "                     ",186
+topScoreHeader  db  "                                 TOP 10  PUNTOS                                 "
+topTimesHeader  db  "                                 TOP 10 TIEMPOS                                 "
+lateral1        db  "                      "
+lateral2        db  "                      "
 NoData          db  "  No hay datos para mostrar$"
+pressSpaceKey   db  "  Presione la barra espaciadora para continuar...$"
+vram            dw  ?                       ;; guardará la pos de mem de video
 ;--------------------------------------------------
 ; USUARIO
 ;--------------------------------------------------
@@ -623,32 +625,25 @@ topScores proc near c uses eax ecx edi
 ; Imprime el top 10 de puntos
 ;--------------------------------------------------
     local i : word, noUsersTemp : word
-    mov i, 1
     mov ax, noUsers
-    mov noUsersTemp, ax
+    mov noUsersTemp, 1
+    mov i, ax
     createFile puntosFN, fileHandler
-    mov al, 201
-    mov fileBuffChar, al                                ;; empieza a formar un marco
-    writeFile fileHandler, fileBuffChar, 1
-    add al, 4
-    mov fileBuffChar, al
-    mov cx, 78
+    mov fileBuffChar, 32
+    mov cx, 80
     _topScores1:
         writeFile fileHandler, fileBuffChar, 1
         loop _topScores1
-    mov al, 187
-    mov fileBuffChar, al
-    writeFile fileHandler, fileBuffChar, 1
     mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
     writeFile fileHandler, fileBuffChar, 1
     writeFile fileHandler, topScoreHeader, 80
     mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
     writeFile fileHandler, fileBuffChar, 1
     _topScores2:
-        cmp noUsersTemp, 0
-        jle _topScores8
-        cmp i, 10
+        cmp noUsersTemp, 10
         jg _topScores8
+        cmp i, 0
+        je _topScores8
         writeFile fileHandler, lateral1, 22
         invoke toAscii, noUsersTemp, offset byte2Number
         .if (noUsersTemp < 10)
@@ -721,60 +716,41 @@ topScores proc near c uses eax ecx edi
         writeFile fileHandler, lateral2, 22
         mov fileBuffChar, 0ah                           ;; termina la parte sup del marco
         writeFile fileHandler, fileBuffChar, 1
-        inc i
-        dec noUsersTemp
+        dec i
+        inc noUsersTemp
         jmp _topScores2
     _topScores8:
-        mov al, 200
-        mov fileBuffChar, al
-        writeFile fileHandler, fileBuffChar, 1
-        mov al, 205
-        mov fileBuffChar, al
-        mov cx, 78
-        _topScores9:
-            writeFile fileHandler, fileBuffChar, 1
-            loop _topScores9
-        mov al, 188
-        mov fileBuffChar, al
-        writeFile fileHandler, fileBuffChar, 1
         closeFile fileHandler
     ret
 topScores endp
 
 ;-------------------------------------------------- 
-topTime proc near c
+topTime proc near c uses eax ebx ecx edx esi edi
 ; Imprime el top 10 tiempos
 ;--------------------------------------------------
     local i : word, noUsersTemp : word
-    mov i, 1
     mov ax, noUsers
-    mov noUsersTemp, ax
+    mov noUsersTemp, 1
+    mov i, ax
     createFile tiempoFN, fileHandler
-    mov al, 201
-    mov fileBuffChar, al                                ;; empieza a formar un marco
-    writeFile fileHandler, fileBuffChar, 1
-    add al, 4
-    mov fileBuffChar, al
-    mov cx, 78
+    mov fileBuffChar, 32
+    mov cx, 80
     _topScores1:
         writeFile fileHandler, fileBuffChar, 1
         loop _topScores1
-    mov al, 187
-    mov fileBuffChar, al
-    writeFile fileHandler, fileBuffChar, 1
     mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
     writeFile fileHandler, fileBuffChar, 1
     writeFile fileHandler, topTimesHeader, 80
     mov fileBuffChar, 0ah                               ;; termina la parte sup del marco
     writeFile fileHandler, fileBuffChar, 1
     _topScores2:
-        cmp noUsersTemp, 0
-        jle _topScores8
-        cmp i, 10
+        cmp noUsersTemp, 10
         jg _topScores8
+        cmp i, 0
+        je _topScores8
         writeFile fileHandler, lateral1, 22
         invoke toAscii, noUsersTemp, offset byte2Number
-        .if (i < 10)
+        .if (noUsersTemp < 10)
             writeFile fileHandler, byte2Number, 1
             mov cx, 7
         .else
@@ -844,22 +820,10 @@ topTime proc near c
         writeFile fileHandler, lateral2, 22
         mov fileBuffChar, 0ah                           ;; termina la parte sup del marco
         writeFile fileHandler, fileBuffChar, 1
-        inc i
-        dec noUsersTemp
+        dec i
+        inc noUsersTemp
         jmp _topScores2
     _topScores8:
-        mov al, 200
-        mov fileBuffChar, al
-        writeFile fileHandler, fileBuffChar, 1
-        mov al, 205
-        mov fileBuffChar, al
-        mov cx, 78
-        _topScores9:
-            writeFile fileHandler, fileBuffChar, 1
-            loop _topScores9
-        mov al, 188
-        mov fileBuffChar, al
-        writeFile fileHandler, fileBuffChar, 1
         closeFile fileHandler
     ret
 topTime endp
@@ -916,7 +880,8 @@ mainAdmin proc near c
         call topScores
         clearScreen
         invoke printRep, 0
-        pauseAnyKey
+        printStr offset pressSpaceKey
+        pauseSpaceKey
         jmp _mainAdmin22
         _mainAdmin21:
             printStrln offset ln
@@ -931,7 +896,8 @@ mainAdmin proc near c
         call topTime
         clearScreen
         invoke printRep, 1
-        pauseAnyKey
+        printStr offset pressSpaceKey
+        pauseSpaceKey
         jmp _mainAdmin32
         _mainAdmin31:
             printStrln offset ln
@@ -942,6 +908,34 @@ mainAdmin proc near c
     ret
 mainAdmin endp
 
+;--------------------------------------------------
+; resetArray proc near c uses eax ebx ecx esi edi
+; Utiliza los array de referencia y los copia en los 
+; array se utilizan para los ordenamientos
+;--------------------------------------------------
+;     local i : word
+;     mov i, 0
+;     xor si, si
+;     xor di, di
+;     _resetArray1:
+;         cmp i, 20
+;         jge _resetArray
+;         mov ax, usrScore2[si]
+;         mov usrScore1[si], ax                       ;; reestablece el arreglo
+;         mov ax, usrTime2[si]
+;         mov usrTime1[si], ax                        ;; reestablece el arreglo
+;         add si, 2
+;     ret
+; resetArray endp
+
+;startSort proc near c uses
+
+;    ret
+;startSort endp
+
+;endSort proc near c uses
+;    ret
+;endSort endp
 end
 
 
