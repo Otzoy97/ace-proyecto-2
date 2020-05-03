@@ -401,7 +401,7 @@ mainUser endp
 
 ;--------------------------------------------------
 ; Convierte un número de 2 bytes a ascii
-toAsciiP2 proc near c uses eax ebx ecx edx , number : word, off : ptr word
+toAsciiP2 proc near c uses eax ebx ecx edx esi , number : word, off : ptr word
 ;--------------------------------------------------
     xor cx, cx
     xor dx, dx

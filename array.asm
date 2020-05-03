@@ -4,6 +4,8 @@
 include p2lib.inc
 include string.asm
 .data
+    ln              db      "$"
+    pressanykey     db      "  Presione cualquier tecla para continuar...$"
     blockWidth      dw      ?               ;; ancho del bloque
     maxHeigth       dw      ?               ;; valor máximo
     padding         dw      ?               ;; espacio entre bloques
@@ -11,7 +13,6 @@ include string.asm
     col             dw      ?               ;; indica la columa en la que se debe pintar
     tempDWord       dd      ?
     vram            dw      ?
-    sense           dw      ?               ;; ascendente = 0 descedente = 1
     velocity        dw      ?               ;; [0-9]
     veloStr0        db      "  Ordenamientos disponibles:",0ah, 0dh
                     db      "  (1) Ordenamiento por Bubblesort",0ah, 0dh
@@ -19,32 +20,43 @@ include string.asm
                     db      "  (3) Ordenamiento por Shellsort",0ah, 0dh,0ah, 0dh
                     db      "  Elija una opci", 162,"n : $"
     veloStr         db      "  Ingrese la velocidad del ordenamiento [0,9]: $"
+    veloSense       db      "  Especifique el sentido del ordenamiento:",0ah, 0dh
+                    db      "  (1) Ascendente",0ah, 0dh
+                    db      "  (2) Descendente",0ah, 0dh,0ah, 0dh
+                    db      "  Elija una opci", 162,"n : $"
+    wwtd_int        db      "  ",168,"Qu", 130,"desea hacer?: ", 0ah, 0dh
+                    db      "  (1) Regresar al menú principal del administrador", 0ah, 0dh
+                    db      "  (2) Regresar al menú de ordenamientos", 0ah, 0dh, 0ah, 0dh
+                    db      "  Elija una opci", 162,"n : $"
+    wrongOpt        db      "  Opci",162,"n no v",160,"lida$"
+    topScoreHeader  db      "               TOP  PUNTOS$"
+    topTimesHeader  db      "               TOP TIEMPOS$"
     chooseOrd       dw      ?               ;; bubble = 0 ; quick = 1 ; shell = 2
     lineVar         db      50 dup(0)
-    chooseOp0       db      "0$"
     chooseOp1       db      "1$"
     chooseOp2       db      "2$"
     chooseOp3       db      "3$"
-    chooseOp4       db      "4$"
-    chooseOp5       db      "5$"
-    chooseOp6       db      "6$"
-    chooseOp7       db      "7$"
-    chooseOp8       db      "8$"
-    chooseOp9       db      "9$"
+    gArrayType      dw      ?
     ;--------------------------------------------------
     ; Tiempo
     ;--------------------------------------------------
-    headerSort      db      "ORD: "
+    headerSort      db      " ORD: "
     nameSort        db      "          "
                     db      "    TMP:  "
     minuG           db      "00:"
     segsG           db      "00"
-                    db      "    VEL: "
+                    db      "   VEL: "
     veloG           db      " "
+    actualVel       dw      ?               ;; aloja la velocidad del ordenamiento [0,9]
     quickName       db      "QUICKSORT",0
     bubleName       db      "BUBBLESORT",0
-    shellName       db      "SHELSORT",0
-    numberChar      db      2 dup(0)
+    shellName       db      "SHELLSORT",0
+    numberChar      db      0,0,0,0,0,'$'
+    ;--------------------------------------------------
+    ; Ordenamiento
+    ;--------------------------------------------------
+    sortType        dw      ?               ;; aloja el tiepo de ordenamiento ha realizar
+    sense           dw      ?               ;; ascendente = 0 descedente = 1
 .code
 ;--------------------------------------------------
 detColor proc near c, value : word
@@ -75,8 +87,8 @@ detColor proc near c, value : word
 detcolor endp
 
 ;--------------------------------------------------
-printBlock proc far c uses eax ebx ecx edx, value : word, startCol : word
-;
+printBlock proc far c uses eax ebx ecx edx, value : word
+; Escribe un bloque de color variable (según ::value::)
 ;--------------------------------------------------
     local startRow : word, i : word, colorl : byte
     mov startRow, 168
@@ -108,7 +120,7 @@ printBlock proc far c uses eax ebx ecx edx, value : word, startCol : word
     mov dx, vram 
     mov es, dx
     _printBlock1:
-        cmp i, 0                   ;; se sale cuando sea igual
+        cmp i, 0                    ;; se sale cuando sea igual
         jle _printBlock2
         mov ax, i
         shl ax, 6                   ;; x64
@@ -160,14 +172,82 @@ startVideo proc near c eax ebx
 startVideo endp 
 
 ;--------------------------------------------------
-showUnsorted proc far c uses eax ebx ecx edx esi edi
+showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
+; Muestra una gráfica de barras que contiene todos
+; los registros de usuarios
 ;--------------------------------------------------
-    mov ah, 00h
-    mov al, 13h
-    int 10h                             ;; inicia el modo video
+    call startVideo                          ;; inicia el modo video
     mov ax, startPad
-    mov col, ax                         ;; inicializa local_col
-
+    mov col, ax                              ;; inicializa local_col
+    xor si, si
+    mov cx, noUsers
+    mov ax, arraytype
+    cmp ax, 0
+    jnz _showUnsorted1
+        mov bx, offset usrScore1
+        jmp _showUnsorted2
+    _showUnsorted1:
+        mov bx, offset usrTime1
+    _showUnsorted2:
+        invoke printBlock, [bx + si]        ;; pinta las barras
+        add si, 2
+        loop _showUnsorted
+    ;; imprime en la memoria de video
+    ;; imprime lo que está almacenado en vram
+    ;; escribirá a la mem de video en pos 5120
+    ;; se escribirán 320 bytes horizontalmente
+    ;; y esos bytes se deberan escrbir 168 veces verticalmente
+    ;; la vram se leerá desde la pos 0
+    invoke syncBuffer, vram, 5120, 320, 168, 0
+    mov ah, 02h
+    xor bx, bx
+    xor dx, dx
+    int 10h                                 ;; coloca el cursor en la linea y columna 0
+    mov cx, 26
+    mov ax, arraytype
+    cmp ax, 0
+    jnz _showUnsorted3
+        printStr offset topScoreHeader      ;; pinta encabezado puntos
+        jmp _showUnsorted4
+    _showUnsorted3:
+        printStr offset topTimesHeader      ;; pinta encabezado tiempo
+    _showUnsorted4: 
+    mov ax, blockWidth
+    shr ax, 1                               ;; divide por 2
+    add ax, startPad
+    shr ax, 3                               ;; divide por 8
+    cmp ax, 2
+    jge _showUnsorted41 
+        mov ax, 0                           ;; es menor a 2, pone 0
+        jmp _showUnsorted42
+    _showUnsorted41:
+        sub ax, 2                           ;; es mayor o igual a 2, le resta 2
+    _showUnsorted42:
+    mov dh, al                              ;; especifica la columna
+    mov dl, 23                              ;; escribe en la penúltima línea
+    xor bx, bx
+    mov ah, 02h
+    int 10h                                 ;; mueve el cursor a [23][(startPad + blockWidth/2)/8 - 2]
+    mov cx, noUsers
+    mov ax, arraytype
+    xor si, si                              ;; reinicia el indice
+    cmp ax, 0
+    jnz _showUnsorted5
+        mov bx, offset usrScore1            ;; determina cuál array utilizar
+        jmp _showUnsorted6
+    _showUnsorted5:
+        mov bx, offset usrTime1
+    _showUnsorted6:
+        flushStr numberChar, 5, '$'
+        mov ax, word ptr [bx + si]
+        invoke toAsciiP2, ax, offset numberChar
+        printStr offset numberChar
+        add si, 2
+        loop _showUnsorted6
+    pauseSpaceKey
+    call cleanVram
+    mov ax, 3
+    int 10h                                 ;; regresa al modo texto
     ret
 showUnsorted endp
 
@@ -175,8 +255,8 @@ showUnsorted endp
 initArray proc far c uses eax ebx ecx edx, arraytype : word
 ; Calcula el grosor de los bloques, el espaciado entre los bloques
 ; y el alto de los bloques
-; arrayType = 0 -> Score
-; arrayType = 1 -> Times
+; arraytype = 0 -> Score
+; arraytype = 1 -> Times
 ;--------------------------------------------------
     mov di, noUsers
     dec di                              ;; recupera un indice válido
@@ -463,4 +543,112 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
     _shell6:
         ret
 shellSort endp
+
+;--------------------------------------------------
+playArray proc far c uses eax ebx ecx edx esi edi, arraytype : word
+; A través de este procedimiento se realiza cualquier ordenamiento
+;--------------------------------------------------
+    mov ax, arraytype
+    invoke initArray, ax                            ;; inicializa el ordenamiento
+    invoke showUnsorted, ax                         ;; pinta las barras sin ordenar
+    _playArray1:
+        clearScreen
+        flushStr nameSort, 10, 32
+        printStr offset veloStr0
+        flushStr lineVar, 50, 0
+        getLine lineVar
+        compareStr lineVar, chooseOp1               ;; es bubblesort = 0
+        jnz _playArray2
+            mov sortType, 0
+            mov cx, 10
+            xor si, si
+            _playArray10:
+                mov al, bubleName[si]
+                mov nameSort[si], al
+                inc si
+                loop _playArray10 
+        jmp _playArray5
+        _playArray2:
+        compareStr lineVar, chooseOp2               ;; es quicksort = 1
+        jnz _playArray3
+            mov sortType, 1
+            mov cx, 9
+            xor si, si
+            _playArray11:
+                mov al, quickName[si]
+                mov nameSort[si], al
+                inc si
+                loop _playArray11
+        jmp _playArray5
+        _playArray3:
+        compareStr lineVar, chooseOp3               ;; es shellsort = 2
+        jnz _playArray4
+            mov sortType, 2
+            mov cx, 9
+            xor si, si
+            _playArray11:
+                mov al, shellName[si]
+                mov nameSort[si], al
+                inc si
+                loop _playArray11
+        jmp _playArray5
+        _playArray4:
+        printStrln offset wrongOpt
+        pauseAnykey
+        jmp _playArray1
+    _playArray5:
+        clearScreen
+        printStrln offset ln
+        printStr offset veloStr
+        flushStr lineVar, 50, 0
+        getLine lineVar
+        mov al, lineVar                             ;; recupera el primer byte
+        cmp al, '0'
+        jb _playArray6
+        cmp al, '9'
+        ja _playArray6
+        mov actualVel, al                           ;; especifica la velocidad
+        sub al, 48                                  ;; recupera el digito
+        xor ah, ah
+        mov actualVel, ax
+        jmp _playArray7                             ;; salta a solicitar el sentido de impresión
+        _playArray6:
+            printStrln offset wrongOpt
+            pauseAnykey
+            jmp _playArray5
+    _playArray7:
+        clearScreen
+        printStrln offset ln
+        printStr offset veloSense
+        flushStr lineVar, 50, 0
+        getLine lineVar
+        compareStr lineVar, chooseOp1               ;; ascendente
+            jnz _playArray8
+            mov sense, 0
+            jmp _playArray_10
+        _playArray8:
+        compareStr lineVar, chooseOp2               ;; descendente
+            jnz _playArray9
+            mov sense, 1
+            jmp _playArray_10 
+        _playArray9:
+            printStrln offset wrongOpt
+            pauseAnykey
+            jmp _playArray7
+    _playArray_10:
+        mov ax, sortType
+        cmp ax, 0                                   ;; es bubblesort
+        jnz _playArray_11
+
+        jmp _playArray_13
+        _playArray_11:
+        cmp ax, 1                                   ;; es quicksort
+        jnz _playArray_12
+
+        jmp _playArray_13
+        _playArray_12:                              ;; es shellsort
+        
+    _playArray_13 
+    ret
+playArray endp
 end
