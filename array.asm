@@ -582,7 +582,7 @@ bubbleSort proc far c uses eax ebx ecx edx esi
 bubbleSort endp
 
 ;--------------------------------------------------
-partition proc c uses ebx ecx esi edi, arrLow : word, arrHigh : word
+partition proc c uses ebx ecx edx esi edi, arrLow : word, arrHigh : word
 ;--------------------------------------------------
     local pivote : word, i : word, loc_sense : word
     mov ax, sense
@@ -615,7 +615,7 @@ partition proc c uses ebx ecx esi edi, arrLow : word, arrHigh : word
             jmp _partition4
         _partition5:
             mov quickDelay, dx      ;; actualiza los ticks
-            cmp ax, sortArray[si]
+            mov ax, sortArray[si]
             cmp loc_sense, 0
             jnz _partition1         ;; ascendente
                 cmp ax, pivote
@@ -827,7 +827,9 @@ showSorted proc near c uses eax ebx ecx edx
         int 1ah
         mov actualTicks, dx     ;; inicializa los ticks :v
         mov quickDelay, dx
-        invoke quickSort
+        mov dx, noUsers
+        dec dx
+        invoke quickSort, 0, dx
     jmp _showSorted8
     _showSorted72:                              ;; es shellsort
         ; mov ax, arrayType
