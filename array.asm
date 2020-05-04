@@ -704,7 +704,6 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
         mov cx, gap             
         cmp cx, 0                       ;; gap > 0
         jle _shell6                     ;; termina _shell1
-        call checkTimer
         mov i, cx                       ;; i = gap
         _shell2:
             mov cx, i                   ;; i
@@ -715,7 +714,6 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
             mov bx, sortArray[di]
             mov temp, bx
             ;--------------------
-            call checkTimer
             mov ax, i
             mov j, ax
             _shell3:
@@ -733,8 +731,8 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
                 jle _shell4             ;; termina shell3
                 mov di, j
                 shl di, 1               ;; lo multiplica por dos
-                push sortArray[si]      ;; arr[j - gap]
-                pop sortArray[di]       ;; arr[j]
+                mov ax, sortArray[si]
+                mov sortArray[di], ax
                 _shellSort0:
                     call checkTimer
                     mov bx, localDelay
@@ -757,8 +755,8 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
             _shell4:
             mov si, j
             shl si, 1                   ;; multiplica por dos
-            push temp                   ;; temp
-            pop sortArray[si]           ;; arr[j] = temp
+            mov ax, temp
+            mov sortArray[si], ax
             _shellSort2:
                 call checkTimer
                 mov bx, localDelay
@@ -779,7 +777,6 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
             mov ax, gap
             shr ax, 1                   ;; lo divide dentro de 2
             mov gap, ax
-            call checkTimer
             jmp _shell1
     _shell6:
         ret
