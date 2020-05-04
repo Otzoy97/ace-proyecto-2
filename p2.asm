@@ -882,7 +882,11 @@ mainAdmin proc near c
         invoke printRep, 0
         printStr offset pressSpaceKey
         pauseSpaceKey
-        invoke initArray, 0, offset usrScore
+        mov di, noUsers
+        dec di
+        sal di, 1                                   ;; multiplica por dos
+        mov ax, usrScore[di]
+        invoke initArray, 0, ax
         call playArray
         jmp _mainAdmin22
         _mainAdmin21:
@@ -900,7 +904,11 @@ mainAdmin proc near c
         invoke printRep, 1
         printStr offset pressSpaceKey
         pauseSpaceKey
-        invoke initArray, 1, offset usrTime
+        mov di, noUsers
+        dec di
+        sal di, 1                                   ;; multiplica por dos
+        mov ax, usrTime[di]
+        invoke initArray, 1, ax
         call playArray
         jmp _mainAdmin32
         _mainAdmin31:
@@ -911,36 +919,6 @@ mainAdmin proc near c
     _mainAdmin4:
     ret
 mainAdmin endp
-
-;--------------------------------------------------
-resetArray proc near c uses eax ebx ecx esi edi
-; Utiliza los array de referencia y los copia en los 
-; array se utilizan para los ordenamientos
-;--------------------------------------------------
-    local i : word
-    mov i, 0
-    xor si, si
-    xor di, di
-    _resetArray1:
-        cmp i, 20
-        jge _resetArray2
-        mov ax, usrScore2[si]
-        mov usrScore1[si], ax                       ;; reestablece el arreglo
-        mov ax, usrTime2[si]
-        mov usrTime1[si], ax                        ;; reestablece el arreglo
-        add si, 2
-    _resetArray2:
-    ret
-resetArray endp
-
-;startSort proc near c uses
-
-;    ret
-;startSort endp
-
-;endSort proc near c uses
-;    ret
-;endSort endp
 end
 
 
