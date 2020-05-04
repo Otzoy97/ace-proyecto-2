@@ -4,6 +4,7 @@
 ;; --------------------------------------------------
 initArray proto far c arraytype : word
 toAsciiP2 proto near c number : word, off : ptr word
+externdef playArray:far
 externdef usrScore1:word
 externdef usrTime1:word
 externdef noUsers:word

@@ -882,6 +882,8 @@ mainAdmin proc near c
         invoke printRep, 0
         printStr offset pressSpaceKey
         pauseSpaceKey
+        invoke initArray, 0, offset usrScore
+        call playArray
         jmp _mainAdmin22
         _mainAdmin21:
             printStrln offset ln
@@ -898,6 +900,8 @@ mainAdmin proc near c
         invoke printRep, 1
         printStr offset pressSpaceKey
         pauseSpaceKey
+        invoke initArray, 1, offset usrTime
+        call playArray
         jmp _mainAdmin32
         _mainAdmin31:
             printStrln offset ln

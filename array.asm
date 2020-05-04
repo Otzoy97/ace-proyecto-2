@@ -36,7 +36,7 @@ include string.asm
     chooseOp1       db      "1$"
     chooseOp2       db      "2$"
     chooseOp3       db      "3$"
-    gArrayType      dw      ?
+    arrayOffsetSort dw      ?               ;; aloja el offset del arreglo a ordenar
     ;--------------------------------------------------
     ; Tiempo
     ;--------------------------------------------------
@@ -183,15 +183,10 @@ showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
     mov col, ax                              ;; inicializa local_col
     xor si, si
     mov cx, noUsers
-    mov ax, arraytype
-    cmp ax, 0
-    jnz _showUnsorted1
-        mov bx, offset usrScore1
-        jmp _showUnsorted2
-    _showUnsorted1:
-        mov bx, offset usrTime1
+    mov bx, arrayOffsetSort
     _showUnsorted2:
-        invoke printBlock, [bx + si]        ;; pinta las barras
+        mov ax, word ptr [bx + si]
+        invoke printBlock, ax               ;; pinta las barras
         add si, 2
         loop _showUnsorted
     ;; imprime en la memoria de video
@@ -230,14 +225,8 @@ showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
     mov ah, 02h
     int 10h                                 ;; mueve el cursor a [23][(startPad + blockWidth/2)/8 - 2]
     mov cx, noUsers
-    mov ax, arraytype
+    mov bx, arrayOffsetSort
     xor si, si                              ;; reinicia el indice
-    cmp ax, 0
-    jnz _showUnsorted5
-        mov bx, offset usrScore1            ;; determina cuál array utilizar
-        jmp _showUnsorted6
-    _showUnsorted5:
-        mov bx, offset usrTime1
     _showUnsorted6:
         flushStr numberChar, 5, '$'
         mov ax, word ptr [bx + si]
@@ -247,8 +236,7 @@ showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
         loop _showUnsorted6
     pauseSpaceKey
     call cleanVram
-    mov ax, 3
-    int 10h                                 ;; regresa al modo texto
+    clearScreen                             ;; regresa al modo texto
     ret
 showUnsorted endp
 
@@ -350,14 +338,6 @@ chekTimer endp
 printFooter proc near c uses eax ebx ecx edx esi edi
 ; Imprime los números que contiene el arreglo
 ;--------------------------------------------------
-    local ltype : word
-    mov ax, gArrayType
-    .if (ax == 0)
-        mov bx, offset usrScore1
-    .else
-        mov bx, offset usrTime1
-    .endif
-    mov ltype, bx                           ;; aloja el offset del arreglo
     mov ax, blockWidth
     shr ax, 1                               ;; divide por dos
     add ax, startPad
@@ -376,7 +356,7 @@ printFooter proc near c uses eax ebx ecx edx esi edi
     int 10h                                 ;; reposiciona el cursor
     mov cx, noUsers
     xor si, si
-    mov bx, ltype
+    mov bx, arrayOffsetSort
     _printFooter3
         flushStr numberChar, 5, '$'
         mov ax, word ptr [bx + si]
@@ -395,13 +375,7 @@ graphSorted proc near c uses eax ebx ecx esi
     mov col, ax                                     ;; reinicia la columna
     xor si, si
     mov cx, noUsers
-    mov ax, gArrayType
-    cmp ax, 0
-    jnz _graphSorted1
-        mov bx, offset usrScore1
-        jmp _graphSorted2
-    _graphSorted1:
-        mov bx, offset usrTime1
+    mov bx, arrayOffsetSort
     _graphSorted2:
         invoke printBlock, [bx + si]
         add si, 2
@@ -417,7 +391,7 @@ graphSorted proc near c uses eax ebx ecx esi
 graphSorted endp
 
 ;--------------------------------------------------
-initArray proc far c uses eax ebx ecx edx, arraytype : word
+initArray proc far c uses eax ebx ecx edx, arraytype : word, offRef : ptr word
 ; Calcula el grosor de los bloques, el espaciado entre los bloques
 ; y el alto de los bloques
 ; arraytype = 0 -> Score
@@ -426,27 +400,30 @@ initArray proc far c uses eax ebx ecx edx, arraytype : word
     mov di, noUsers
     dec di                              ;; recupera un indice válido
     shl di, 1                           ;; multiplica por 2
+    mov bx, offRef                      ;; indica la referencia del arreglo
     mov ax, arraytype
     cmp ax, 0
     jnz _initArray1
-        mov ax, word ptr usrScore1[di]  ;; recupera el valor más grande
+        mov ax, offset usrScore1        ;; recupera el valor más grande
         jmp _initArray2
     _initArray1:
-        mov ax, word ptr usrTime1[di]   ;; recupera el valor más grande
+        mov ax, offset usrTime1
     _initArray2:
-        mov maxHeigth, ax               ;; indica el valor máximo
-    mov ax, 40
+    mov arrayOffsetSort, ax             ;; establece el offset para el arreglo
+    mov ax, word ptr [bx + di]          ;; recupera elvalor más grande
+    mov maxHeigth, ax                   ;; indica el valor máximo
+    mov ax, 40                          ;; 2x20
     mov bx, noUsers
     cmp bx, 1
     jz _initArray3
         cwd
         div bx
         mov startPad, ax                ;; indica el espacio al inicio
-        mov ax, 220
+        mov ax, 220                     ;; 11x20
         cwd
         div bx
         mov blockWidth, ax              ;; indica el ancho de las barras
-        mov ax, 76
+        mov ax, 76                      ;; 4x19
         dec bx 
         cwd 
         div bx
@@ -457,6 +434,8 @@ initArray proc far c uses eax ebx ecx edx, arraytype : word
         mov padding, 0
         mov startPad, 40
     _initArray4:
+    mov ax, arraytype
+    invoke showUnsorted, ax             ;; muestra la grafica de barras
     ret
 initArray endp
 
@@ -509,7 +488,7 @@ bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
         mov ah, 0h
         int 1ah
         cmp dx, bx
-        jg _2bS0
+        jg _2bS0                    ;; continúa con el ordenamiento
         jmp _2bS                    ;; continúa esperando
     _2bS0:
         mov localDelay, dx          ;; actualiza el número de ticks locales
@@ -759,54 +738,47 @@ shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : 
 shellSort endp
 
 ;--------------------------------------------------
-showSorted proc near c uses eax ebx ecx edx esi edi, arraytype : word
+showSorted proc near c uses eax ebx ecx edx
 ; Realiza el mismo procedimiento que showUnsorted
 ;--------------------------------------------------
-    local offArraytype : word
-    call startVideo
-    mov ax, arraytype
-    mov gArrayType, ax                          ;; especifica el tipo de ordenamiento de forma global
+    flushStr minuG, 2, '0'                      ;; reinicia
+    flushStr segsG, 2, '0'                      ;; reinicia
+    mov actualTime, 0                           ;; reinicia
+    mov ax, 13h
+    int 10h                                     ;; entra al modo video
     call graphSorted
     call printHeader                            ;; imprime el encabezado
-    invoke printFooter, arraytype               ;; imprime el pie de página 
-    _showSorted7:
-        mov ah, 01h
-        int 16h
-        jz _showSorted7
-        mov ah, 00h
-        int 16h
-        cmp ah, 39h
-        jnz _showSorted7
+    call printFooter                            ;; imprime el pie de página 
+    pauseSpaceKey                               ;; espera por presionar tecla espaciadora
     mov bx, sortType                            ;; carga el tipo de ordenamiento
     cmp bx, 0                                   ;; es bubblesort
     jnz _showSorted71
-        mov ax, offArraytype
+        mov ax, arrayOffsetSort
         mov bx, noUsers
         invoke bubbleSort, ax, bx
     jmp _showSorted8
     _showSorted71:
     cmp bx, 1                                   ;; es quicksort
     jnz _showSorted72
-        mov ax, offArraytype
+        mov ax, arrayOffsetSort
         mov bx, noUsers
         dec ax
         invoke quickSort, ax, 0, bx
     jmp _showSorted8
     _showSorted72:                              ;; es shellsort
-        mov ax, offArraytype
+        mov ax, arrayOffsetSort
         mov bx, noUsers
-        invoke bubbleSort, ax, bx
+        invoke shellSort, ax, bx
     jmp _showSorted8
     ret
 showSorted endp
 
 ;--------------------------------------------------
-playArray proc far c uses eax ebx ecx edx esi edi, arraytype : word
+playArray proc far c uses eax ebx ecx edx esi edi
 ; A través de este procedimiento se realiza cualquier ordenamiento
+; Despliega un menú desde donde se podrá elegir el ordenamiento
+; que se realizará sobre el array del que hace referencia arrayOffsetSort
 ;--------------------------------------------------
-    mov ax, arraytype
-    invoke initArray, ax                            ;; inicializa el ordenamiento
-    invoke showUnsorted, ax                         ;; pinta las barras sin ordenar
     _playArray1:
         clearScreen
         flushStr nameSort, 10, 32
@@ -894,18 +866,7 @@ playArray proc far c uses eax ebx ecx edx esi edi, arraytype : word
             pauseAnykey
             jmp _playArray7
     _playArray_10:
-        mov ax, sortType
-        cmp ax, 0                                   ;; es bubblesort
-        jnz _playArray_11
-
-        jmp _playArray_13
-        _playArray_11:
-        cmp ax, 1                                   ;; es quicksort
-        jnz _playArray_12
-
-        jmp _playArray_13
-        _playArray_12:                              ;; es shellsort
-
+        call showSorted
     _playArray_13 
     ret
 playArray endp
