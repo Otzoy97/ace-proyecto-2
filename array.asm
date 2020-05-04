@@ -3,6 +3,7 @@
 .stack 400h
 include p2lib.inc
 include string.asm
+include screen.asm
 .data
     ln              db      "$"
     pressanykey     db      "  Presione cualquier tecla para continuar...$"
@@ -11,22 +12,18 @@ include string.asm
     padding         dw      ?               ;; espacio entre bloques
     startPad        dw      ?               ;; offset al inicio
     col             dw      ?               ;; indica la columa en la que se debe pintar
-    tempDWord       dd      ?
     vram            dw      ?
     velocity        dw      ?               ;; [0-9]
     veloStr0        db      "  Ordenamientos disponibles:",0ah, 0dh
                     db      "  (1) Ordenamiento por Bubblesort",0ah, 0dh
                     db      "  (2) Ordenamiento por Quicksort",0ah, 0dh
-                    db      "  (3) Ordenamiento por Shellsort",0ah, 0dh,0ah, 0dh
+                    db      "  (3) Ordenamiento por Shellsort",0ah, 0dh
+                    db      "  (4) Regresar al menú del administrador",0ah, 0dh,0ah, 0dh
                     db      "  Elija una opci", 162,"n : $"
     veloStr         db      "  Ingrese la velocidad del ordenamiento [0,9]: $"
     veloSense       db      "  Especifique el sentido del ordenamiento:",0ah, 0dh
                     db      "  (1) Ascendente",0ah, 0dh
                     db      "  (2) Descendente",0ah, 0dh,0ah, 0dh
-                    db      "  Elija una opci", 162,"n : $"
-    wwtd_int        db      "  ",168,"Qu", 130,"desea hacer?: ", 0ah, 0dh
-                    db      "  (1) Regresar al menú principal del administrador", 0ah, 0dh
-                    db      "  (2) Regresar al menú de ordenamientos", 0ah, 0dh, 0ah, 0dh
                     db      "  Elija una opci", 162,"n : $"
     wrongOpt        db      "  Opci",162,"n no v",160,"lida$"
     topScoreHeader  db      "               TOP  PUNTOS$"
@@ -36,7 +33,9 @@ include string.asm
     chooseOp1       db      "1$"
     chooseOp2       db      "2$"
     chooseOp3       db      "3$"
-    arrayOffsetSort dw      ?               ;; aloja el offset del arreglo a ordenar
+    chooseOp4       db      "4$"
+    sortArray       dw      20 dup(?)       ;; alojará una copia del arreglo ha ordenar
+    typeArrayG      dw      ?               ;; determina el tipo de arreglo 0 - score | 1 - times
     ;--------------------------------------------------
     ; Tiempo
     ;--------------------------------------------------
@@ -47,7 +46,7 @@ include string.asm
     segsG           db      "00"
                     db      "   VEL: "
     veloG           db      " $"
-    actualVel       dw      ?               ;; aloja la velocidad del ordenamiento [0,9]
+    actualVel       dw      ?               ;; aloja la velocidad del ordenamiento 
     quickName       db      "QUICKSORT",0
     bubleName       db      "BUBBLESORT",0
     shellName       db      "SHELLSORT",0
@@ -60,6 +59,40 @@ include string.asm
     sortType        dw      ?               ;; aloja el tiepo de ordenamiento ha realizar
     sense           dw      ?               ;; ascendente = 0 descedente = 1
 .code
+
+;--------------------------------------------------
+; Convierte un número de 2 bytes a ascii
+toAsciiA proc far c uses eax ebx ecx edx esi , number : word, off : ptr word
+;--------------------------------------------------
+    xor cx, cx
+    xor dx, dx
+    mov ax, number
+    .if (ax == 0)
+        mov bx, off
+        mov al, '0'
+        mov [bx], al
+        ret
+    .endif
+    mov bx, 10
+    .while( ax != 0)
+        cwd
+        div bx
+        push dx
+        xor dx, dx
+        inc cx
+    .endw
+    mov bx, off
+    xor si, si
+    .while (cx != 0)
+        pop ax
+        add ax, '0'
+        mov [bx + si], al
+        inc si
+        dec cx
+    .endw
+    ret
+toAsciiA endp
+
 ;--------------------------------------------------
 detColor proc near c, value : word
 ; Devuelve en al el byte que representa el color con el 
@@ -74,14 +107,17 @@ detColor proc near c, value : word
     cmp ax, 40                      ;; hasta 40
     jg _detColor2
         mov al, 1                   ;; color azul
+        jmp _detColor5
     _detColor2:
     cmp ax, 60                      ;; hasta 60
     jg _detColor3
         mov al, 44                  ;; color amarillo
+        jmp _detColor5
     _detColor3:
     cmp ax, 80                      ;; hasta 80
     jg _detColor4
-        mov al, 3                   ;; color verde
+        mov al, 2                   ;; color verde
+        jmp _detColor5
     _detColor4:                     ;; desde 81 en adelante
         mov al, 15                  ;; color blanco
     _detColor5:
@@ -89,7 +125,7 @@ detColor proc near c, value : word
 detcolor endp
 
 ;--------------------------------------------------
-printBlock proc far c uses eax ebx ecx edx, value : word
+printBlock proc near c uses eax ebx ecx edx, value : word
 ; Escribe un bloque de color variable (según ::value::)
 ;--------------------------------------------------
     local startRow : word, i : word, colorl : byte
@@ -103,11 +139,10 @@ printBlock proc far c uses eax ebx ecx edx, value : word
     add eax, ebx
     shl ebx, 2                      ;; x128
     add eax, ebx
-    mov tempDWord, eax
-    mov ax, word ptr tempDWord[0]
-    mov dx, word ptr tempDWord[2]
+    xor edx, edx
+    xor ebx, ebx
     mov bx, maxHeigth
-    div bx                          ;; z*168/maxHeigth
+    div ebx                         ;; z*168/maxHeigth
     mov i, ax
     dec i
     sub startRow, ax                ;; determina el offset para empezar a pintar
@@ -133,6 +168,7 @@ printBlock proc far c uses eax ebx ecx edx, value : word
         add di, col
         mov al, colorl
         mov cx, blockWidth
+        cld
         rep stosb
         dec i
         jmp _printBlock1
@@ -159,7 +195,7 @@ cleanVram proc near c uses eax ebx ecx edx esi esi
 cleanVram endp
 
 ;--------------------------------------------------
-startVideo proc near c eax ebx
+startVideo proc near c uses eax ebx
 ; Inicia el modo video e inicializa la memoria reservada
 ;--------------------------------------------------
     mov ah, 48h
@@ -183,12 +219,12 @@ showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
     mov col, ax                              ;; inicializa local_col
     xor si, si
     mov cx, noUsers
-    mov bx, arrayOffsetSort
+    mov bx, offset sortArray
     _showUnsorted2:
         mov ax, word ptr [bx + si]
         invoke printBlock, ax               ;; pinta las barras
         add si, 2
-        loop _showUnsorted
+        loop _showUnsorted2
     ;; imprime en la memoria de video
     ;; imprime lo que está almacenado en vram
     ;; escribirá a la mem de video en pos 5120
@@ -219,29 +255,30 @@ showUnsorted proc far c uses eax ebx ecx edx esi, arraytype : word
     _showUnsorted41:
         sub ax, 2                           ;; es mayor o igual a 2, le resta 2
     _showUnsorted42:
-    mov dh, al                              ;; especifica la columna
-    mov dl, 23                              ;; escribe en la penúltima línea
+    mov dh, 23                              ;; especifica la columna
+    mov dl, al                              ;; escribe en la penúltima línea
     xor bx, bx
     mov ah, 02h
     int 10h                                 ;; mueve el cursor a [23][(startPad + blockWidth/2)/8 - 2]
     mov cx, noUsers
-    mov bx, arrayOffsetSort
+    mov bx, offset sortArray
     xor si, si                              ;; reinicia el indice
     _showUnsorted6:
         flushStr numberChar, 5, '$'
-        mov ax, word ptr [bx + si]
-        invoke toAsciiP2, ax, offset numberChar
+        mov ax, [bx + si]
+        invoke toAsciiA, ax, offset numberChar
         printStr offset numberChar
+        printChar 32
         add si, 2
         loop _showUnsorted6
     pauseSpaceKey
-    call cleanVram
+    ;call cleanVram
     clearScreen                             ;; regresa al modo texto
     ret
 showUnsorted endp
 
 ;--------------------------------------------------
-printHeader proc near c uses eax ebx edx
+printHeaderA proc near c uses eax ebx edx
 ; Imprime el nombre del ordenamiento el tiempo transcurrido
 ; y la velocidad del ordenamiento
 ;--------------------------------------------------
@@ -251,10 +288,10 @@ printHeader proc near c uses eax ebx edx
     int 10h                                 ;; reposiciona el cursor
     printStr offset headerSort
     ret
-printHeader endp
+printHeaderA endp
 
 ;--------------------------------------------------
-toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
+toAsciiTA proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
 ; Debe existir un valor previamente cargado en ax
 ; Comvierte a ascii la hora dada por la variables con offset toVar
 ;--------------------------------------------------
@@ -281,10 +318,10 @@ toAsciiT proc near c uses eax ebx ecx edx esi edi, toVar : ptr word
         dec cx
     .endw
     ret
-toAsciiT endp
+toAsciiTA endp
 
 ;--------------------------------------------------
-timeComposing proc near c uses eax ebx ecx edx
+timeComposingA proc near c uses eax ebx ecx edx
 ; Compone el tiempo transcurrido en hh:mm:ss
 ;--------------------------------------------------
     flushStr minuG, 2, '0'
@@ -302,16 +339,16 @@ timeComposing proc near c uses eax ebx ecx edx
     .endw
     .if (cx == 2)               ;; recupera minutos
         pop ax
-        invoke toAsciiT, offset minuG
+        invoke toAsciiTA, offset minuG
         dec cx
     .endif
     .if (cx == 1)               ;; recupera segundos
         pop ax
-        invoke toAsciiT, offset segsG
+        invoke toAsciiTA, offset segsG
         dec cx
     .endif
     ret
-timeComposing endp
+timeComposingA endp
 
 ;--------------------------------------------------
 checkTimer proc near c uses eax ebx edx
@@ -328,14 +365,14 @@ checkTimer proc near c uses eax ebx edx
         mov actualTicks, dx                 ;; actualiza el número de ticks
         inc actualTime                      ;; incrementa en un segundo el contador
         mov ax, actualTime                  ;; carga el número de segundos
-        call timeComposing                  ;; actualiza el contador de min y seg
-        call printHeader
+        call timeComposingA                 ;; actualiza el contador de min y seg
+        call printHeaderA
     _checkTimer1:
     ret
-chekTimer endp
+checkTimer endp
 
 ;--------------------------------------------------
-printFooter proc near c uses eax ebx ecx edx esi edi
+printFooterA proc near c uses eax ebx ecx edx esi edi
 ; Imprime los números que contiene el arreglo
 ;--------------------------------------------------
     mov ax, blockWidth
@@ -349,33 +386,35 @@ printFooter proc near c uses eax ebx ecx edx esi edi
     _printFooter1:
         sub ax, 2
     _printFooter2:
-    mov dh, al                              ;; indica la columna
-    mov dl, 23
+    mov dh, 23                              ;; indica la columna
+    mov dl, al
     xor bx, bx
     mov ah, 02h
     int 10h                                 ;; reposiciona el cursor
     mov cx, noUsers
     xor si, si
-    mov bx, arrayOffsetSort
-    _printFooter3
+    mov bx, offset sortArray
+    _printFooter3:
         flushStr numberChar, 5, '$'
         mov ax, word ptr [bx + si]
-        invoke toAsciiP2, ax, offset numberChar
+        invoke toAsciiA, ax, offset numberChar
         printStr offset numberChar
+        printChar 32
         add si, 2
         loop _printFooter3
     ret
-printFooter endp
+printFooterA endp
 
 ;--------------------------------------------------
 graphSorted proc near c uses eax ebx ecx esi
 ; Grafica las barras del arreglo global
 ;--------------------------------------------------
+    call cleanVram
     mov ax, startPad
     mov col, ax                                     ;; reinicia la columna
     xor si, si
     mov cx, noUsers
-    mov bx, arrayOffsetSort
+    mov bx, offset sortArray
     _graphSorted2:
         invoke printBlock, [bx + si]
         add si, 2
@@ -391,41 +430,57 @@ graphSorted proc near c uses eax ebx ecx esi
 graphSorted endp
 
 ;--------------------------------------------------
-initArray proc far c uses eax ebx ecx edx, arraytype : word, offRef : ptr word
+copyArray proc near c uses eax esi ecx
+; Dado el tipo de array que especifica arrayType
+; realiza una copia hacia sortArray
+;--------------------------------------------------
+    xor si, si
+    mov cx, noUsers
+    mov ax, typeArrayG                  ;; recupera el tipo de array
+    cmp ax, 0
+    jnz _copyArray0                     ;; realiza una copia exacta del arreglo de score
+        _copyArray0_1:
+            mov ax, usrScore1[si]
+            mov sortArray[si], ax
+            add si, 2
+            loop _copyArray0_1
+        jmp _copyArray1
+    _copyArray0:                        ;; realiza una copia exacta del arreglo de time
+        _copyArray0_2:
+            mov ax, usrTime1[si]
+            mov sortArray[si], ax
+            add si, 2
+            loop _copyArray0_2
+    _copyArray1:
+    ret
+copyArray endp
+
+;--------------------------------------------------
+initArray proc far c uses eax ebx ecx edx, arraytype : word, maxValue : word
 ; Calcula el grosor de los bloques, el espaciado entre los bloques
 ; y el alto de los bloques
 ; arraytype = 0 -> Score
 ; arraytype = 1 -> Times
 ;--------------------------------------------------
-    mov di, noUsers
-    dec di                              ;; recupera un indice válido
-    shl di, 1                           ;; multiplica por 2
-    mov bx, offRef                      ;; indica la referencia del arreglo
+    mov ax, maxValue
+    mov maxHeigth, ax                   ;; establece el valor máximo para un bloque
     mov ax, arraytype
-    cmp ax, 0
-    jnz _initArray1
-        mov ax, offset usrScore1        ;; recupera el valor más grande
-        jmp _initArray2
-    _initArray1:
-        mov ax, offset usrTime1
-    _initArray2:
-    mov arrayOffsetSort, ax             ;; establece el offset para el arreglo
-    mov ax, word ptr [bx + di]          ;; recupera elvalor más grande
-    mov maxHeigth, ax                   ;; indica el valor máximo
+    mov typeArrayG, ax
+    call copyArray                      ;; realiza una copia del arreglo deseado
     mov ax, 40                          ;; 2x20
     mov bx, noUsers
     cmp bx, 1
     jz _initArray3
-        cwd
+        xor dx, dx
         div bx
         mov startPad, ax                ;; indica el espacio al inicio
         mov ax, 220                     ;; 11x20
-        cwd
+        xor dx, dx
         div bx
         mov blockWidth, ax              ;; indica el ancho de las barras
         mov ax, 76                      ;; 4x19
         dec bx 
-        cwd 
+        xor dx, dx
         div bx
         mov padding, ax                 ;; indica el espacio entre barras
         jmp _initArray4
@@ -446,7 +501,7 @@ checkDelay proc far c uses ebx ecx, localDelay : word
 ; zero - si se permite el cambio
 ;--------------------------------------------------
     mov bx, localDelay
-    add bx, velLocal
+    add bx, actualVel
     mov ah, 0
     int 1ah
     cmp dx, bx
@@ -461,55 +516,53 @@ checkDelay proc far c uses ebx ecx, localDelay : word
 checkDelay endp
 
 ;--------------------------------------------------
-bubbleSort proc far c uses eax ecx esi, startArr:ptr word, sizeArr: word
+bubbleSort proc far c uses eax ebx ecx edx esi
 ; Ordena de forma ascendente un arreglo que inicia 
 ; en statArr y de tamaño sizeArr
 ;--------------------------------------------------
-    local loc_sense : word, velLocal : byte, localDelay : word
-    mov ax, actualVel
-    mov velLocal, al                ;; coloca la velocidad local
+    local loc_sense : word, localDelay : word
     mov ax, sense
-    mov loc_sense, ax               ;; especifica el sentido de ordenamiento
+    mov loc_sense, ax                       ;; especifica el sentido de ordenamiento
     mov ah, 00h
     int 1ah
-    mov actualTicks, dx             ;; inicializa el número de ticks
+    mov actualTicks, dx                     ;; inicializa el número de ticks
     mov localDelay, dx
     xor cx, cx
     xor si, si
-    mov cx, sizeArr                 ;; especifica el tamaño del arreglo
-    dec cx                          ;; disminiuye el tamaño del arreglo
+    mov cx, noUsers                         ;; especifica el tamaño del arreglo
+    dec cx                                  ;; disminiuye el tamaño del arreglo
     _1bS:
-        push cx                     ;; almacena al contador principal
-        mov si, startArr            ;; especifica el inicio del arreglo
+        push cx                             ;; almacena al contador principal
+        xor si, si
     _2bS:
-        call checkTimer             ;; verifica si ya es necesario actualizar el tiempo
+        call checkTimer                     ;; verifica si ya es necesario actualizar el tiempo
         mov bx, localDelay
-        add bx, velLocal
+        add bx, actualVel
         mov ah, 0h
         int 1ah
         cmp dx, bx
-        jg _2bS0                    ;; continúa con el ordenamiento
-        jmp _2bS                    ;; continúa esperando
+        jg _2bS0                            ;; continúa con el ordenamiento
+        jmp _2bS                            ;; continúa esperando
     _2bS0:
-        mov localDelay, dx          ;; actualiza el número de ticks locales
-        mov ax, [si]                ;; recupera el valor
-        cmp loc_sense, 0            ;; es ascendente
+        mov localDelay, dx                  ;; actualiza el número de ticks locales
+        mov ax, sortArray[si]               ;; recupera el valor
+        cmp loc_sense, 0                    ;; es ascendente
         jnz _bubble0
-            cmp ax, [si + 2]        ;; compara el valor actual con el valor siguiente
-            jl _3bS                 ;; si es menor no hace nada
+            cmp ax, sortArray[si + 2]       ;; compara el valor actual con el valor siguiente
+            jl _3bS                         ;; si es menor no hace nada
             jmp _bubble1
-        _bubble0:                   ;; es descendente
-            cmp ax, [si + 2]        ;; compara el valor actual con el valor siguiente
-            jg _3bS                 ;; si es mayor no hace nada
+        _bubble0:                           ;; es descendente
+            cmp ax, sortArray[si + 2]       ;; compara el valor actual con el valor siguiente
+            jg _3bS                         ;; si es mayor no hace nada
         _bubble1:        
-        xchg ax, [si + 2]           ;; intercambia los valores
-        mov [si], ax
-        call graphSorted            ;; pinta las barras
-        call printFooter            ;; pinta el pie de página
+        xchg ax, sortArray[si + 2]           ;; intercambia los valores
+        mov sortArray[si], ax
+        call graphSorted                    ;; pinta las barras
+        call printFooterA                   ;; pinta el pie de página
     _3bS:  
-        add si, 2                   ;; el apuntador avanza
+        add si, 2                           ;; el apuntador avanza
         loop _2bS
-        pop cx                      ;; reestablece el contador anterior
+        pop cx                              ;; reestablece el contador anterior
         loop _1bS
     ret 
 bubbleSort endp
@@ -747,29 +800,27 @@ showSorted proc near c uses eax ebx ecx edx
     mov ax, 13h
     int 10h                                     ;; entra al modo video
     call graphSorted
-    call printHeader                            ;; imprime el encabezado
-    call printFooter                            ;; imprime el pie de página 
+    call printHeaderA                            ;; imprime el encabezado
+    call printFooterA                            ;; imprime el pie de página 
     pauseSpaceKey                               ;; espera por presionar tecla espaciadora
     mov bx, sortType                            ;; carga el tipo de ordenamiento
     cmp bx, 0                                   ;; es bubblesort
     jnz _showSorted71
-        mov ax, arrayOffsetSort
-        mov bx, noUsers
-        invoke bubbleSort, ax, bx
+        call bubbleSort
     jmp _showSorted8
     _showSorted71:
     cmp bx, 1                                   ;; es quicksort
     jnz _showSorted72
-        mov ax, arrayOffsetSort
-        mov bx, noUsers
-        dec ax
-        invoke quickSort, ax, 0, bx
+        ; mov ax, arrayType
+        ; mov bx, noUsers
+        ; dec ax
+        ; invoke quickSort, ax, 0, bx
     jmp _showSorted8
     _showSorted72:                              ;; es shellsort
-        mov ax, arrayOffsetSort
-        mov bx, noUsers
-        invoke shellSort, ax, bx
-    jmp _showSorted8
+        ; mov ax, arrayType
+        ; mov bx, noUsers
+        ; invoke shellSort, ax, bx
+    _showSorted8:
     ret
 showSorted endp
 
@@ -777,7 +828,7 @@ showSorted endp
 playArray proc far c uses eax ebx ecx edx esi edi
 ; A través de este procedimiento se realiza cualquier ordenamiento
 ; Despliega un menú desde donde se podrá elegir el ordenamiento
-; que se realizará sobre el array del que hace referencia arrayOffsetSort
+; que se realizará sobre el array del que hace referencia arrayType
 ;--------------------------------------------------
     _playArray1:
         clearScreen
@@ -790,11 +841,11 @@ playArray proc far c uses eax ebx ecx edx esi edi
             mov sortType, 0
             mov cx, 10
             xor si, si
-            _playArray10:
+            _playArray1_0:
                 mov al, bubleName[si]
                 mov nameSort[si], al
                 inc si
-                loop _playArray10 
+                loop _playArray1_0 
         jmp _playArray5
         _playArray2:
         compareStr lineVar, chooseOp2               ;; es quicksort = 1
@@ -802,11 +853,11 @@ playArray proc far c uses eax ebx ecx edx esi edi
             mov sortType, 1
             mov cx, 9
             xor si, si
-            _playArray11:
+            _playArray1_1:
                 mov al, quickName[si]
                 mov nameSort[si], al
                 inc si
-                loop _playArray11
+                loop _playArray1_1
         jmp _playArray5
         _playArray3:
         compareStr lineVar, chooseOp3               ;; es shellsort = 2
@@ -814,13 +865,17 @@ playArray proc far c uses eax ebx ecx edx esi edi
             mov sortType, 2
             mov cx, 9
             xor si, si
-            _playArray11:
+            _playArray1_2:
                 mov al, shellName[si]
                 mov nameSort[si], al
                 inc si
-                loop _playArray11
+                loop _playArray1_2
         jmp _playArray5
         _playArray4:
+        compareStr lineVar, chooseOp4               ;; regresar al menú del administrador
+        jnz _playArray5_1
+            jmp _playArray_13
+        _playArray5_1:
         printStrln offset wrongOpt
         pauseAnykey
         jmp _playArray1
@@ -835,12 +890,14 @@ playArray proc far c uses eax ebx ecx edx esi edi
         jb _playArray6
         cmp al, '9'
         ja _playArray6
-        mov actualVel, al                           ;; especifica la velocidad
+        mov veloG, al                               ;; especifica la velocidad (en el encabezado)
         sub al, 48                                  ;; recupera el digito
         xor ah, ah
-        sal ax, 2                                   ;; x4
-        add ax, 2                                   ;; x4 + 2
-        mov actualVel, ax
+        mov bx, 9
+        sub bx, ax
+        sal bx, 2                                   ;; x4
+        add bx, 2                                   ;; x4 + 2
+        mov actualVel, bx
         jmp _playArray7                             ;; salta a solicitar el sentido de impresión
         _playArray6:
             printStrln offset wrongOpt
@@ -867,7 +924,15 @@ playArray proc far c uses eax ebx ecx edx esi edi
             jmp _playArray7
     _playArray_10:
         call showSorted
-    _playArray_13 
+        pauseSpaceKey                               ;; espera la tecla espaciadora
+        clearScreen                                 ;; regresa al modo texto
+        call cleanVram                              ;; limpia el doble buffer
+        call copyArray                              ;; reestablece el arreglo
+        jmp _playArray1                             ;; regresa al flujo normal
+    _playArray_13: 
+        mov ah, 49h
+        mov es, vram
+        int 21h                                     ;; libera la memoria ram
     ret
 playArray endp
 end
