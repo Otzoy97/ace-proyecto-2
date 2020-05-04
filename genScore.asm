@@ -3,12 +3,11 @@
 .stack 100h
 include fileH.asm
 include string.asm
-getNumber proto near c no : word
 .data
     str1            db  "Escriba el numero de usuarios: $"
     randomSeed      dd  ?
     nameFile        db  "scores.tzy", 0
-    number          db  3 dup(0)
+    number          db  4 dup(0)
     fileH           dw  ?
     buffchar        db  ?
     buffword        dw  ?
@@ -19,15 +18,22 @@ getNumber proto near c no : word
     mov ds, ax
 main proc near c
     local i : word
+    xor ecx, ecx
+    xor edx, edx
+    mov ah, 0
+    int 1ah
+    shl ecx, 16                          ;; ahora cx, está en la parte alta de ecx
+    add ecx, edx                         ;; suma la parte baja de ecx
+    mov randomSeed, ecx                  ;; para números aleatorios
     printStrln offset str1
-    flushStr number, 3, 0
+    flushStr number, 4, 0
     getLine number
-    invoke getNumber, number
+    call getNumber
     .if  (ax > 20)
         mov ax, 20
     .endif
-    createFile nameFile, fileH
     mov i, ax
+    createFile nameFile, fileH
     .while (i != 0)
         writeFile fileH, nameusr, 4
         
@@ -79,13 +85,13 @@ main proc near c
     int 21h
 main endp
 
-getNumber proc near c, no : word
+getNumber proc near c
     local tempN : word
     mov tempN, 0
     mov bx, offset number
     xor si, si
     _getNumber1:
-        mov al, byte ptr [bx + si]
+        mov al, number[si]
         cmp al, 0
         jz _getNumber2
         mov ax, tempN
@@ -95,8 +101,8 @@ getNumber proc near c, no : word
         add bx, ax
         mov tempN, bx
         xor ax, ax
-        mov al, [bx + si]
-        sub al, 48
+        mov al, number[si]
+        sub al, '0'
         add tempN, ax 
         inc si
         jmp _getNumber1
