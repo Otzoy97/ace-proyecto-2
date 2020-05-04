@@ -18,7 +18,7 @@ include screen.asm
                     db      "  (1) Ordenamiento por Bubblesort",0ah, 0dh
                     db      "  (2) Ordenamiento por Quicksort",0ah, 0dh
                     db      "  (3) Ordenamiento por Shellsort",0ah, 0dh
-                    db      "  (4) Regresar al menú del administrador",0ah, 0dh,0ah, 0dh
+                    db      "  (4) Regresar al men",163 ,"del administrador",0ah, 0dh,0ah, 0dh
                     db      "  Elija una opci", 162,"n : $"
     veloStr         db      "  Ingrese la velocidad del ordenamiento [0,9]: $"
     veloSense       db      "  Especifique el sentido del ordenamiento:",0ah, 0dh
@@ -693,6 +693,7 @@ partition proc c uses ebx ecx edx esi edi, arrLow : word, arrHigh : word
             shl si, 1               ;; multiplica por dos
             shl di, 1
             mov ax, sortArray[di]   ;; intercambia sortArray[di], sortArray[si]
+            invoke mkSound, ax
             xchg sortArray[si], ax
             mov sortArray[di], ax
             inc i                   ;; i++
@@ -718,6 +719,7 @@ partition proc c uses ebx ecx edx esi edi, arrLow : word, arrHigh : word
         mov si, arrLow              ;; start
         shl si, 1                   ;; start
         mov ax, sortArray[si]
+        invoke mkSound, ax
         xchg sortArray[di], ax
         mov sortArray[si], ax
         call graphSorted
@@ -806,6 +808,7 @@ shellSort proc far c uses eax ebx ecx edx esi edi, arrLength : word
                 mov di, j
                 shl di, 1               ;; lo multiplica por dos
                 mov ax, sortArray[si]
+                push ax
                 mov sortArray[di], ax
                 _shellSort0:
                     call checkTimer
@@ -818,6 +821,8 @@ shellSort proc far c uses eax ebx ecx edx esi edi, arrLength : word
                     jmp _shellSort0
                 _shellSort1:
                     mov localDelay, dx
+                    pop ax
+                    invoke mkSound, ax
                     call graphSorted
                     call printFooterA
                 ;--------------------
@@ -830,6 +835,7 @@ shellSort proc far c uses eax ebx ecx edx esi edi, arrLength : word
             mov si, j
             shl si, 1                   ;; multiplica por dos
             mov ax, temp
+            push ax
             mov sortArray[si], ax
             _shellSort2:
                 call checkTimer
@@ -842,6 +848,8 @@ shellSort proc far c uses eax ebx ecx edx esi edi, arrLength : word
                 jmp _shellSort2
             _shellSort3:
                 mov localDelay, dx
+                pop ax
+                invoke mkSound, ax
                 call graphSorted
                 call printFooterA
             ;--------------------
