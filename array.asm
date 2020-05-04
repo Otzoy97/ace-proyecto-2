@@ -520,7 +520,7 @@ bubbleSort proc far c uses eax ebx ecx edx esi
 ; Ordena de forma ascendente un arreglo que inicia 
 ; en statArr y de tamaño sizeArr
 ;--------------------------------------------------
-    local loc_sense : word, localDelay : word
+    local loc_sense : word, localDelay : word, i : word, j : word
     mov ax, sense
     mov loc_sense, ax                       ;; especifica el sentido de ordenamiento
     mov ah, 00h
@@ -531,39 +531,49 @@ bubbleSort proc far c uses eax ebx ecx edx esi
     xor si, si
     mov cx, noUsers                         ;; especifica el tamaño del arreglo
     dec cx                                  ;; disminiuye el tamaño del arreglo
-    _1bS:
-        push cx                             ;; almacena al contador principal
+    mov i, cx
+    _bubbleSort0:
+        cmp i, 0
+        jz _bubbleSort8                     ;; termina el procedimiento
         xor si, si
-    _2bS:
-        call checkTimer                     ;; verifica si ya es necesario actualizar el tiempo
-        mov bx, localDelay
-        add bx, actualVel
-        mov ah, 0h
-        int 1ah
-        cmp dx, bx
-        jg _2bS0                            ;; continúa con el ordenamiento
-        jmp _2bS                            ;; continúa esperando
-    _2bS0:
-        mov localDelay, dx                  ;; actualiza el número de ticks locales
-        mov ax, sortArray[si]               ;; recupera el valor
-        cmp loc_sense, 0                    ;; es ascendente
-        jnz _bubble0
-            cmp ax, sortArray[si + 2]       ;; compara el valor actual con el valor siguiente
-            jl _3bS                         ;; si es menor no hace nada
-            jmp _bubble1
-        _bubble0:                           ;; es descendente
-            cmp ax, sortArray[si + 2]       ;; compara el valor actual con el valor siguiente
-            jg _3bS                         ;; si es mayor no hace nada
-        _bubble1:        
-        xchg ax, sortArray[si + 2]           ;; intercambia los valores
-        mov sortArray[si], ax
-        call graphSorted                    ;; pinta las barras
-        call printFooterA                   ;; pinta el pie de página
-    _3bS:  
-        add si, 2                           ;; el apuntador avanza
-        loop _2bS
-        pop cx                              ;; reestablece el contador anterior
-        loop _1bS
+        mov cx, i
+        mov j, cx
+        _bubbleSort1:
+            cmp j, 0
+            jz _bubbleSort7                 ;; continúa con la siguiente iteración
+            _bubbleSort2:
+                call checkTimer
+                mov bx, localDelay
+                add bx, actualVel
+                mov ah, 0h
+                int 1ah
+                cmp dx, bx
+                jg _bubbleSort3
+            jmp _bubbleSort2
+            _bubbleSort3:
+                mov localDelay, dx
+                mov ax, sortArray[si]
+                cmp loc_sense, 0
+                jnz _bubbleSort4                ;; es ascendente
+                    cmp ax, sortArray[si + 2]
+                    jl _bubbleSort6             ;; si es menor no hace nada
+                    jmp _bubbleSort5
+                _bubbleSort4:                   ;; es descendente
+                    cmp ax, sortArray[si + 2]
+                    jg _bubbleSort6             ;; si es mayor no hace nada
+                _bubbleSort5:
+                    xchg ax, sortArray[si + 2]
+                    mov sortArray[si], ax
+                    call graphSorted
+                    call printFooterA
+            _bubbleSort6:
+                add si, 2
+                dec j
+                jmp _bubbleSort1
+        _bubbleSort7:
+            dec i
+            jmp _bubbleSort0
+    _bubbleSort8:
     ret 
 bubbleSort endp
 
