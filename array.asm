@@ -58,6 +58,10 @@ include screen.asm
     ;--------------------------------------------------
     sortType        dw      ?               ;; aloja el tiepo de ordenamiento ha realizar
     sense           dw      ?               ;; ascendente = 0 descedente = 1
+    ;--------------------------------------------------
+    ; QuickSort
+    ;--------------------------------------------------
+    quickDelay      dw      ?
 .code
 
 ;--------------------------------------------------
@@ -578,11 +582,13 @@ bubbleSort proc far c uses eax ebx ecx edx esi
 bubbleSort endp
 
 ;--------------------------------------------------
-partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHigh : word
+partition proc c uses ebx ecx esi edi, arrLow : word, arrHigh : word
 ;--------------------------------------------------
-    local pivote : word
+    local pivote : word, i : word, loc_sense : word
+    mov ax, sense
+    mov loc_sense, ax
     xor si, si
-    mov bx, startArr                ;;especifica el inicio del array
+    mov bx, offset sortArray        ;;especifica el inicio del array
     mov di, arrLow                  ;;especifica el indice para el pivote
     shl di, 1                       ;;multiplica por dos el limite inferior
     mov ax, [bx + di]               ;;obtiene el pivote
@@ -593,75 +599,71 @@ partition proc c uses ebx ecx esi edi, startArr : ptr word, arrLow : word, arrHi
     mov si, di                      ;; j = i
     mov cx, arrLow                  
     inc cx                          ;; for j = arrLow + 1
-    _1partition:
+    mov i, cx
+    _partition0:
+        mov cx, i
         cmp cx, arrHigh             ;; j <= arrHigh
-        jg _partPreEnd              
-        mov ax, pivote  
-        cmp [bx + si], ax           ;;arr[j] < pivote
-        jge _2partition
+        jg _partition6
+        _partition4:
+            call checkTimer         ;; intentará actualizar el tiempo
+            mov bx, quickDelay      ;; recupera el delay
+            add bx, actualVel
+            mov ah, 0h
+            int 1ah                 ;; recupera los ticks del sistema
+            cmp dx, bx
+            jg _partition5          ;; ya transcurrió el tiempo suficiente
+            jmp _partition4
+        _partition5:
+            mov quickDelay, dx      ;; actualiza los ticks
+            cmp ax, sortArray[si]
+            cmp loc_sense, 0
+            jnz _partition1         ;; ascendente
+                cmp ax, pivote
+                jge _partition3     ;; arr[j] < pivote
+                jmp _partition2
+            _partition1:                ;; descendente
+                cmp ax, pivote
+                jle _partition3         ;; arr[j] > pivote
+        _partition2:
+            mov bx, offset sortArray
             push [bx + di]          ;; arr[i]
-            push [bx + si]          ;; arr[j]
+            push [bx + si]          ;; arr[i]
             pop [bx + di]           ;; arr[i] = arr[j]
             pop [bx + si]           ;; arr[j] = arr[i]
-            add di, 2               ;; i++
-    ;------------------------------------------------------
-        ; push cx
-        ; push bx
-        ; push di
-        ; mov cx, 7
-        ; xor di, di
-        ; _1:
-        ;     xor bx, bx
-        ;     mov bx, startArr
-        ;     mov bx, [bx + di]
-        ;     add bx, '0'
-        ;     printChar bl
-        ;     add di, 2
-        ;     loop _1
-        ; printChar 0ah
-        ; printChar 0dh
-        ; pop di
-        ; pop bx
-        ; pop cx
-    ;------------------------------------------------------
-        _2partition:
+            add di, 2
+            call graphSorted
+            call printFooterA
+        _partition3:
             add si, 2               ;; j++
-            inc cx                  ;; j++
-            jmp _1partition
-    _partPreEnd:            
-        sub di, 2                       ;; i = i - 1
-        mov si, arrLow                  ;; start
-        shl si, 1                       ;; start
-        push [bx + si]                  ;; arr[start]
-        push [bx + di]                  ;; arr[i]
-        pop [bx + si]                   ;; arr[start] = arr[i]
-        pop [bx + di]                   ;; arr[i] = arr[start]
-    ;------------------------------------------------------
-        ; push cx
-        ; push bx
-        ; push di
-        ; mov cx, 7
-        ; xor di, di
-        ; _2:
-        ;     xor bx, bx
-        ;     mov bx, startArr
-        ;     mov bx, [bx + di]
-        ;     add bx, '0'
-        ;     printChar bl
-        ;     add di, 2
-        ;     loop _2
-        ; printChar 0ah
-        ; printChar 0dh
-        ; pop di
-        ; pop bx
-        ; pop cx
-    ;------------------------------------------------------
-        mov ax, di                      ;;mueve a ax el retorno de (i + 1) <=> di
+            inc i                   ;; j++
+            jmp _partition0
+    _partition6:
+        call checkTimer
+        mov bx, quickDelay
+        add bx, actualVel
+        mov ah, 0h
+        int 1ah
+        cmp dx, bx
+        jg _partition7
+        jmp _partition6
+    _partition7:
+        mov quickDelay, dx          ;; actualiza los ticks
+        sub di, 2                   ;; i = i - 1
+        mov si, arrLow              ;; start
+        sal si, 1                   ;; start
+        mov bx, offset sortArray
+        push [bx + si]              ;; arr[start]
+        push [bx + di]              ;; arr[i]
+        pop [bx + si]               ;; arr[start] = arr[i]
+        pop [bx + di]               ;; arr[i] = arr[start]
+        call graphSorted
+        call printFooterA
+        mov ax, di                  ;; mueve a ax el retorno de (i + 1) <=> di
         ret
 partition endp
 
 ;--------------------------------------------------
-quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: word
+quickSort proc far c uses eax ebx, arrLow: word, arrHigh: word
 ; Ordena de forma ascendente el arreglo de startArr
 ; y que comienza en arrLow y termina en arrHigh
 ;--------------------------------------------------
@@ -671,13 +673,13 @@ quickSort proc far c uses eax ebx, startArr:ptr word, arrLow: word, arrHigh: wor
     cmp ax, arrHigh         ;; compara el limite superior con el inferior
     jge qSEnd               ;; si es mayor o igual termina el procedimiento
         xor ax, ax          ;; ax contendrá el valor de retorno, se limpia
-        invoke partition, startArr, arrLow, arrHigh
+        invoke partition, arrLow, arrHigh
         shr ax, 1           ;; divide dentro de dos
         mov pidx, ax        ;; almacena el pivote
         dec pidx            ;; decrementa el contador
-        invoke quickSort, startArr, arrLow, pidx
+        invoke quickSort, arrLow, pidx
         add pidx, 2         ;; reestablece y aumenta el indice
-        invoke quickSort, startArr, pidx, arrHigh
+        invoke quickSort, pidx, arrHigh
     qSEnd:
     ret
 quickSort endp
@@ -821,10 +823,11 @@ showSorted proc near c uses eax ebx ecx edx
     _showSorted71:
     cmp bx, 1                                   ;; es quicksort
     jnz _showSorted72
-        ; mov ax, arrayType
-        ; mov bx, noUsers
-        ; dec ax
-        ; invoke quickSort, ax, 0, bx
+        mov ah, 00h
+        int 1ah
+        mov actualTicks, dx     ;; inicializa los ticks :v
+        mov quickDelay, dx
+        invoke quickSort
     jmp _showSorted8
     _showSorted72:                              ;; es shellsort
         ; mov ax, arrayType
