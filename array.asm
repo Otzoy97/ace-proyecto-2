@@ -684,118 +684,102 @@ quickSort proc far c uses eax, arrLow: word, arrHigh: word
 quickSort endp
 
 ;--------------------------------------------------
-shellSort proc far c uses eax ebx ecx esi edi, startArr : ptr word, arrLength : word
+shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
 ; Ordena de forma ascendente el arreglo de starArr
 ; utilizando el algoritmo de shellsort
 ;--------------------------------------------------
-    local temp : word, j : word, gap : word, i: word
+    local temp : word, j : word, gap : word, i: word, localDelay : word
     mov temp, 0
     mov j, 0
-    mov gap, 0
+    mov ax, arrLength
+    shr ax, 1                           ;; divide dentro de dos
+    mov gap, ax  
     mov i, 0
     ;--------------------
-    mov bx, startArr
-    ;--------------------
-    mov ax, arrLength
-    shr ax, 1                   ;; divide dentro de dos
-    mov gap, ax                 
+    mov ah, 0
+    int 1ah
+    mov localDelay, dx                  ;; inicializa los tiks
+    mov actualTicks, dx
     _shell1:
         mov cx, gap             
-        cmp cx, 0               ;; gap > 0
-        jle _shell6             ;; termina _shell1
-        mov i, cx               ;; i = gap
+        cmp cx, 0                       ;; gap > 0
+        jle _shell6                     ;; termina _shell1
+        call checkTimer
+        mov i, cx                       ;; i = gap
         _shell2:
-            mov cx, i           ;; i
-            cmp cx, arrLength   ;; i < n
-            jge _shell5         ;; termina _shell2
-            mov di, cx          ;; di = cx = i
-            shl di, 1           ;; multiplica por dos
-            push [bx + di]      ;; arr[i]
-            pop temp            ;; temp = arr[i]
+            mov cx, i                   ;; i
+            cmp cx, arrLength           ;; i < n
+            jge _shell5                 ;; termina _shell2
+            mov di, cx                  ;; di = cx = i
+            shl di, 1                   ;; multiplica por dos
+            mov bx, sortArray[di]
+            mov temp, bx
             ;--------------------
-            push i
-            pop j               ;; j = i
+            call checkTimer
+            mov ax, i
+            mov j, ax
             _shell3:
-                mov cx, j       ;; 
-                cmp cx, gap     ;; j >= gap
-                jl _shell4      ;; termina shell3
+                mov cx, j
+                cmp cx, gap             ;; j >= gap
+                jl _shell4              ;; termina shell3
                 mov di, gap
                 mov si, j
                 shl di, 1       
-                shl si, 1       ;; lo multiplica por dos
-                sub si, di      ;; j - gap
-                mov ax, [bx + si] ;; arr[j -gap]
-                mov cx, temp    ;; temp
-                cmp ax, cx      ;; arr[j - gap] > temp
-                jle _shell4     ;; termina shell3
+                shl si, 1               ;; lo multiplica por dos
+                sub si, di              ;; j - gap
+                mov ax, sortArray[si]   ;; arr[j -gap]
+                mov cx, temp            ;; temp
+                cmp ax, cx              ;; arr[j - gap] > temp
+                jle _shell4             ;; termina shell3
                 mov di, j
-                shl di, 1       ;; lo multiplica por dos
-                push [bx + si]  ;; arr[j - gap]
-                pop [bx + di]   ;; arr[j]
-
-    ;------------------------------------------------------
-        ; push cx
-        ; push bx
-        ; push di
-        ; mov cx, 7
-        ; xor di, di
-        ; _1:
-        ;     xor bx, bx
-        ;     mov bx, startArr
-        ;     mov bx, [bx + di]
-        ;     add bx, '0'
-        ;     printChar bl
-        ;     add di, 2
-        ;     loop _1
-        ; printChar 0ah
-        ; printChar 0dh
-        ; pop di
-        ; pop bx
-        ; pop cx
-    ;------------------------------------------------------
-
+                shl di, 1               ;; lo multiplica por dos
+                push sortArray[si]      ;; arr[j - gap]
+                pop sortArray[di]       ;; arr[j]
+                _shellSort0:
+                    call checkTimer
+                    mov bx, localDelay
+                    add bx, actualVel
+                    mov ah, 0h
+                    int 1ah
+                    cmp dx, bx
+                    jg _shellSort1
+                    jmp _shellSort0
+                _shellSort1:
+                    mov localDelay, dx
+                    call graphSorted
+                    call printFooterA
                 ;--------------------
-                mov di, gap     ;; gap
-                mov si, j       ;; j
-                sub si, di      ;; j = j - gap
+                mov di, gap             ;; gap
+                mov si, j               ;; j
+                sub si, di              ;; j = j - gap
                 mov j, si
                 jmp _shell3
             _shell4:
             mov si, j
-            shl si, 1           ;; multiplica por dos
-            push temp           ;; temp
-            pop [bx + si]       ;; arr[j] = temp
-
-
-    ;------------------------------------------------------
-        ; push cx
-        ; push bx
-        ; push di
-        ; mov cx, 7
-        ; xor di, di
-        ; _2:
-        ;     xor bx, bx
-        ;     mov bx, startArr
-        ;     mov bx, [bx + di]
-        ;     add bx, '0'
-        ;     printChar bl
-        ;     add di, 2
-        ;     loop _2
-        ; printChar 0ah
-        ; printChar 0dh
-        ; pop di
-        ; pop bx
-        ; pop cx
-    ;------------------------------------------------------
-
-
+            shl si, 1                   ;; multiplica por dos
+            push temp                   ;; temp
+            pop sortArray[si]           ;; arr[j] = temp
+            _shellSort2:
+                call checkTimer
+                mov bx, localDelay
+                add bx, actualVel
+                mov ah, 0h
+                int 1ah
+                cmp dx, bx
+                jg _shellSort3
+                jmp _shellSort2
+            _shellSort3:
+                mov localDelay, dx
+                call graphSorted
+                call printFooterA
             ;--------------------
-            inc i               ;; i++
+            inc i                       ;; i++
             jmp _shell2         
         _shell5:
             mov ax, gap
-            shr ax, 1           ;; lo divide dentro de 2
+            shr ax, 1                   ;; lo divide dentro de 2
             mov gap, ax
+            call checkTimer
             jmp _shell1
     _shell6:
         ret
@@ -831,9 +815,8 @@ showSorted proc near c uses eax ebx ecx edx
         invoke quickSort, 0, dx
     jmp _showSorted8
     _showSorted72:                              ;; es shellsort
-        ; mov ax, arrayType
-        ; mov bx, noUsers
-        ; invoke shellSort, ax, bx
+        mov bx, noUsers
+        invoke shellSort, bx
     _showSorted8:
     ret
 showSorted endp
