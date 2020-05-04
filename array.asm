@@ -98,6 +98,70 @@ toAsciiA proc far c uses eax ebx ecx edx esi , number : word, off : ptr word
 toAsciiA endp
 
 ;--------------------------------------------------
+detHz proc near c, value : word
+; Devuelve en ax el valor hz para producir un sonido
+;--------------------------------------------------
+    mov ax, value
+    cmp ax, 20                      ;; hasta 20 
+    jg _detHz1
+        mov ax, 11931               ;; 100 Hz
+    jmp _detHz5
+    _detHz1:
+    cmp ax, 40                      ;; hasta 40
+    jg _detHz2
+        mov ax, 3977                ;; 300 Hz
+        jmp _detHz5
+    _detHz2:
+    cmp ax, 60                      ;; hasta 60
+    jg _detHz3
+        mov ax, 2386                ;; 500 Hz
+        jmp _detHz5
+    _detHz3:
+    cmp ax, 80                      ;; hasta 80
+    jg _detHz4
+        mov ax, 1704                ;; 700 Hz
+        jmp _detHz5
+    _detHz4:                        ;; desde 81 en adelante
+        mov ax, 1325                ;; 900 Hz
+    _detHz5:
+        ret
+detHz endp
+
+;--------------------------------------------------
+mkSound proc near c uses eax ebx edx, value : word
+; Realiza un pequeño pitido
+;--------------------------------------------------
+    local delaylocal : word
+    mov ah, 0
+    int 1ah
+    mov delaylocal, dx              ;; actualiza los ticks
+    mov al, 86h
+    out 43h, al
+    invoke detHz, value
+    out 42h, al
+    mov al, ah
+    out 42h, al
+    in al, 61h
+    or al, 00000011b
+    out 61h, al
+    push ax
+    _mkSound0:
+        mov bx, delaylocal
+        add bx, 1
+        mov ah, 0
+        int 1ah
+        cmp dx, bx
+        jg _mkSound1
+        jmp _mkSound0
+    _mkSound1:
+        pop ax
+        in al, 61h
+        and al, 11111100b
+        out 61h, al
+    ret
+mkSound endp
+
+;--------------------------------------------------
 detColor proc near c, value : word
 ; Devuelve en al el byte que representa el color con el 
 ; que se pintará un bloque
@@ -567,6 +631,7 @@ bubbleSort proc far c uses eax ebx ecx edx esi
                     jg _bubbleSort6             ;; si es mayor no hace nada
                 _bubbleSort5:
                     xchg ax, sortArray[si + 2]
+                    invoke mkSound, ax
                     mov sortArray[si], ax
                     call graphSorted
                     call printFooterA
@@ -684,7 +749,7 @@ quickSort proc far c uses eax, arrLow: word, arrHigh: word
 quickSort endp
 
 ;--------------------------------------------------
-shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
+shellSort proc far c uses eax ebx ecx edx esi edi, arrLength : word
 ; Ordena de forma ascendente el arreglo de starArr
 ; utilizando el algoritmo de shellsort
 ;--------------------------------------------------
@@ -701,6 +766,7 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
     mov localDelay, dx                  ;; inicializa los tiks
     mov actualTicks, dx
     _shell1:
+        call checkTimer
         mov cx, gap             
         cmp cx, 0                       ;; gap > 0
         jle _shell6                     ;; termina _shell1
@@ -727,8 +793,16 @@ shellSort proc far c uses eax ebx ecx esi edi, arrLength : word
                 sub si, di              ;; j - gap
                 mov ax, sortArray[si]   ;; arr[j -gap]
                 mov cx, temp            ;; temp
-                cmp ax, cx              ;; arr[j - gap] > temp
-                jle _shell4             ;; termina shell3
+                mov dx, sense   
+                    cmp dx, 0                   ;; es ascendente        
+                    jnz _shellSort4
+                        cmp ax, cx              ;; arr[j - gap] > temp
+                        jle _shell4             ;; termina shell3
+                        jmp _shellSort5
+                    _shellSort4:                ;; es descendente
+                        cmp ax, cx              ;; arr[j - gap] < temp
+                        jge _shell4
+                    _shellSort5:
                 mov di, j
                 shl di, 1               ;; lo multiplica por dos
                 mov ax, sortArray[si]
