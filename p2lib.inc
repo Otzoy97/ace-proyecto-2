@@ -2,8 +2,7 @@
 ;; --------------------------------------------------
 ;; array functions
 ;; --------------------------------------------------
-initArray proto far c arraytype : word
-toAsciiP2 proto near c number : word, off : ptr word
+initArray proto far c arraytype : word, maxValue : word
 externdef playArray:far
 externdef usrScore1:word
 externdef usrTime1:word
