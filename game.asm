@@ -311,10 +311,7 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         jmp _getLine1               ;; continúa el ciclo
     _getLine3:                      ;; llena las variables con la info recuperada
         xor ax, ax
-        mov al, es:[10]             ;; recupera el nivel 
-        sub al, '0'                 ;; recupera el número
-        dec al                      ;; lo decrementa para obtener un índice válido
-        mov di, ax                  ;; establece el indice
+        mov di, j                   ;; establece el indice
         invoke validateNumber, 20   ;; duración nivel
         mov lvlsDur[di], dl
         invoke validateNumber, 30   ;; tiempo obstáculos
@@ -329,10 +326,10 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
         mov dh, 'R'
         .if (es:[70] == dl || es:[70] == dh)
             mov charBuffer, dl
-            printChar charBuffer
+            ;printChar charBuffer
             mov ax, di
             add ax, '0'
-            printChar al
+            ;printChar al
             mov charBuffer, 0
             mov lvlsColor[di], dl
         .endif
@@ -358,7 +355,7 @@ loadLine proc far c uses eax ebx ecx edx esi edi, nameFile : word
             add bx, di                  ;; obtiene di*10
             mov di, bx                  ;; determina el registro index
             mov cx, 10
-            xor si, si                  ;; la pos 0 contiene el nombre del nivel
+            mov si, 10                  ;; la pos 1 contiene el nombre del nivel
             _getLine4:                  ;; copia el nombre del nivel
                 mov al, es:[si]         ;; recupera un caracter
                 cmp al, 0               ;; es nulo?
