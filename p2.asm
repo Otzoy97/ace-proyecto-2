@@ -449,6 +449,7 @@ loadScores proc near c uses eax esi
     flushStr usrTime, 40, 0
     flushStr usrTime1, 40, 0
     flushStr usrTime2, 40, 0
+    mov noUsers, 0
     openFile scoresFN, fileHandler
     jc _getLine6
     _getLine1:
@@ -854,8 +855,11 @@ mainAdmin proc near c
 ; Menú principal para el usuario administrador
 ;--------------------------------------------------
     call loadScores                                 ;; carga la info de scores.ply
-    call sortTime                                   ;; ordena la info para el top 10 de tiempo
-    call sortScore                                  ;; ordena la info para el top 10 de puntos
+    mov ax, noUsers
+    cmp ax, 0
+    jz _mainAdmin1
+        call sortTime                                   ;; ordena la info para el top 10 de tiempo
+        call sortScore                                  ;; ordena la info para el top 10 de puntos
     _mainAdmin1:
         clearScreen
         printStr offset header
@@ -914,52 +918,10 @@ mainAdmin proc near c
         _mainAdmin31:
             printStrln offset ln
             printStrln offset NoData
+            pauseAnyKey
         _mainAdmin32:
         jmp _mainAdmin1
     _mainAdmin4:
     ret
 mainAdmin endp
 end
-
-
-    ; call videoStart
-    ; call initGame
-    ;_1:
-        ; call clearScreen
-        ; call initPrint        
-        ; call printFrame
-        ; call printBackground
-        ; invoke printObs, 1, 0
-        ; invoke printObs, 3, 1
-        ; call printCar
-        ; call syncBuffer
-        ; call printHeader
-        ; mov ah, 01h
-        ; int 16h
-        ; jnz _2
-        ; jmp _1
-    ;_2:
-        ; call clearScreen
-        ; call syncBuffer
-        ; call videoStop
-    ; mov cx, 7
-    ; xor di, di
-    ; _1:
-    ;     xor bx, bx
-    ;     mov bx, array[di]
-    ;     add bx, '0'
-    ;     printChar bl
-    ;     add di, 2
-    ;     loop _1
-    ; printChar 0ah
-    ; printChar 0dh
-    ; invoke shellSort, offset array, 7
-    ; mov cx, 7
-    ; xor di, di
-    ; _2:     
-    ;     xor bx, bx
-    ;     mov bx, array[di]
-    ;     add bx, '0'
-    ;     printChar bl
-    ;     add di, 2
-    ;     loop _2
