@@ -18,7 +18,7 @@ include screen.asm
                     db      "  (1) Ordenamiento por Bubblesort",0ah, 0dh
                     db      "  (2) Ordenamiento por Quicksort",0ah, 0dh
                     db      "  (3) Ordenamiento por Shellsort",0ah, 0dh
-                    db      "  (4) Regresar al men",163 ,"del administrador",0ah, 0dh,0ah, 0dh
+                    db      "  (4) Regresar al men",163 ," del administrador",0ah, 0dh,0ah, 0dh
                     db      "  Elija una opci", 162,"n : $"
     veloStr         db      "  Ingrese la velocidad del ordenamiento [0,9]: $"
     veloSense       db      "  Especifique el sentido del ordenamiento:",0ah, 0dh
@@ -561,27 +561,6 @@ initArray proc far c uses eax ebx ecx edx, arraytype : word, maxValue : word
     invoke showUnsorted, ax             ;; muestra la grafica de barras
     ret
 initArray endp
-
-;--------------------------------------------------
-checkDelay proc far c uses ebx ecx, localDelay : word
-; Estimula el registro de flags
-; nozero - no se permite el cambio
-; zero - si se permite el cambio
-;--------------------------------------------------
-    mov bx, localDelay
-    add bx, actualVel
-    mov ah, 0
-    int 1ah
-    cmp dx, bx
-    jg _checkDelay1
-        mov ax, 0                       ;; no han pasado los ticks necesarios
-        jmp _checkDelay2
-    _checkDelay1:
-        mov ax, 1                       ;; ya pasaron los ticks necesarios
-    _checkDelay2:
-    cmp ax, 1
-    ret
-checkDelay endp
 
 ;--------------------------------------------------
 bubbleSort proc far c uses eax ebx ecx edx esi
